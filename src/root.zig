@@ -4,3 +4,8 @@ pub const OpCode = enum {
 
 const std = @import("std");
 const chunk = @import("./chunk.zig");
+const expect = std.testing;
+
+test "loxz" {
+    try expect(true);
+}

@@ -93,18 +93,14 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    const test_mod = b.createModule(.{ .target = target, .optimize = optimize, .root_source_file = b.path("src/tests.zig") });
+
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.
     const lib_unit_tests = b.addTest(.{
-        .root_module = lib_mod,
+        .root_module = test_mod,
     });
 
-    const chunk_tests = b.addTest(.{
-        .root_source_file = b.path("src/chunk.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    const run_chunk_tests = b.addRunArtifact(chunk_tests);
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
     const exe_unit_tests = b.addTest(.{
@@ -119,5 +115,4 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
-    test_step.dependOn(&run_chunk_tests.step);
 }
