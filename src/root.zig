@@ -4,7 +4,15 @@ pub const OpCode = enum {
 
 /// A bytecode chunk
 pub const Chunk = struct {
-    count: usize, // Bytes used
-    capacity: usize, // Bytes allocated
-    code: [*]u8, // Many-pointer to chunk data
+    /// Bytes used
+    count: usize,
+    /// Bytes allocated
+    capacity: usize,
+    /// Many-pointer to chunk data
+    code: [*]u8,
 };
+
+// Alternatively, this suffices as well
+// pub const Chunk2 = std.ArrayList(u8);
+
+const std = @import("std");
