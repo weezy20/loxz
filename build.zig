@@ -99,6 +99,12 @@ pub fn build(b: *std.Build) void {
         .root_module = lib_mod,
     });
 
+    const chunk_tests = b.addTest(.{
+        .root_source_file = b.path("src/chunk.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const run_chunk_tests = b.addRunArtifact(chunk_tests);
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
     const exe_unit_tests = b.addTest(.{
@@ -113,4 +119,5 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_lib_unit_tests.step);
     test_step.dependOn(&run_exe_unit_tests.step);
+    test_step.dependOn(&run_chunk_tests.step);
 }
