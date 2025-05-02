@@ -58,7 +58,7 @@ pub const Chunk = struct {
 test "Chunk initialization" {
     // Test Chunk initialization
     var chunk = Chunk.init();
-    const allocator = std.heap.page_allocator;
+    const allocator = std.testing.allocator;
     defer chunk.deinit(allocator);
 
     try std.testing.expect(chunk.count == 0);
