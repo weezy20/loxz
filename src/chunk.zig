@@ -1,5 +1,7 @@
 const std = @import("std");
-const Allocator = @import("common.zig").Allocator;
+const common = @import("common.zig");
+const Allocator = common.Allocator;
+const expect = common.expect;
 
 /// A bytecode chunk
 pub const Chunk = struct {
@@ -61,14 +63,51 @@ test "Chunk initialization" {
     const allocator = std.testing.allocator;
     defer chunk.deinit(allocator);
 
-    try std.testing.expect(chunk.count == 0);
-    try std.testing.expect(chunk.capacity == 0);
-    try std.testing.expect(chunk.code[0] == undefined);
+    try expect(chunk.count == 0);
+    try expect(chunk.capacity == 0);
+    try expect(chunk.code[0] == undefined);
 
     // Test Chunk type size - 24 bytes
-    try std.testing.expect(@sizeOf(Chunk) == 3 * @sizeOf(usize));
+    try expect(@sizeOf(Chunk) == 3 * @sizeOf(usize));
+}
+
+test "Chunk grow and deinit" {
+    var chunk = Chunk.init();
+    const allocator = std.testing.allocator;
+    defer chunk.deinit(allocator);
+
+    // Initial state checks
+    try expect(chunk.count == 0);
+    try expect(chunk.capacity == 0);
+
+    // Grow the chunk
+    try chunk.grow(allocator);
+
+    // Check after growing
+    try expect(chunk.capacity == 8);
+    try expect(chunk.count == 0);
+
+    // Write some bytes
+    try chunk.write(42, allocator);
+    try chunk.write(84, allocator);
+
+    // Check after writing
+    try expect(chunk.count == 2);
+    try expect(chunk.code[0] == 42);
+    try expect(chunk.code[1] == 84);
+
+    // Grow again
+    try chunk.grow(allocator);
+
+    // Check after second grow
+    try expect(chunk.capacity == 16);
+    try expect(chunk.count == 2);
+    try expect(chunk.code[0] == 42);
+    try expect(chunk.code[1] == 84);
+
+    // Deinit is deferred, ensuring memory is freed
 }
 
 test "chunk sanity check" {
-    try std.testing.expect(true);
+    try expect(true);
 }
