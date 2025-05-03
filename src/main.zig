@@ -38,9 +38,8 @@ fn file_or_repl(allocator: std.mem.Allocator) !?[]u8 {
 }
 
 /// Validate the file extension. Returns:
-/// - `true` if the file ends with exactly `.lox`
+/// - `true` if the file exists AND ends with exactly `.lox`
 /// - `false` for every other extension
-/// - Error
 fn validate_file(file: []const u8) !bool {
     const lox_ext = ".lox";
     // Must have at least one character before `.lox` (e.g., `a.lox`)
@@ -51,7 +50,13 @@ fn validate_file(file: []const u8) !bool {
     const extension = file[ext_start..];
 
     // Case-sensitive exact match
-    return std.mem.eql(u8, extension, lox_ext);
+    if (!std.mem.eql(u8, extension, lox_ext)) return false;
+
+    // Check if the file exists in the filesystem
+    const file_exists = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
+    file_exists.close();
+
+    return true;
 }
 
 const lib = @import("loxz");
