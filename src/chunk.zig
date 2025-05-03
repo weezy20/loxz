@@ -1,5 +1,5 @@
 const std = @import("std");
-const Allocator = std.mem.Allocator;
+const Allocator = @import("common.zig").Allocator;
 
 /// A bytecode chunk
 pub const Chunk = struct {
@@ -19,7 +19,7 @@ pub const Chunk = struct {
         };
     }
     /// Free the Chunk
-    pub fn deinit(self: *Chunk, allocator: std.mem.Allocator) void {
+    pub fn deinit(self: *Chunk, allocator: Allocator) void {
         if (self.capacity > 0) {
             allocator.free(self.code[0..self.capacity]);
         }
@@ -67,4 +67,8 @@ test "Chunk initialization" {
 
     // Test Chunk type size - 24 bytes
     try std.testing.expect(@sizeOf(Chunk) == 3 * @sizeOf(usize));
+}
+
+test "chunk sanity check" {
+    try std.testing.expect(true);
 }

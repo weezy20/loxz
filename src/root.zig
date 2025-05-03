@@ -3,9 +3,8 @@ pub const OpCode = enum {
 };
 
 const std = @import("std");
-const chunk = @import("./chunk.zig");
-const expect = std.testing.expect;
 
-test "loxz" {
+const expect = std.testing.expect;
+test "loxz sanity check" {
     try expect(true);
 }
