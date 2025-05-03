@@ -74,7 +74,6 @@ test "Chunk initialization" {
 test "Chunk grow and deinit" {
     var chunk = Chunk.init();
     const allocator = std.testing.allocator;
-    defer chunk.deinit(allocator);
 
     // Initial state checks
     try expect(chunk.count == 0);
@@ -105,7 +104,11 @@ test "Chunk grow and deinit" {
     try expect(chunk.code[0] == 42);
     try expect(chunk.code[1] == 84);
 
-    // Deinit is deferred, ensuring memory is freed
+    chunk.deinit(allocator);
+    // Check state after deinitialization
+    try expect(chunk.count == 0);
+    try expect(chunk.capacity == 0);
+    try expect(chunk.code == undefined);
 }
 
 test "chunk sanity check" {
