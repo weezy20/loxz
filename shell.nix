@@ -3,6 +3,7 @@
 pkgs.mkShell {
   buildInputs = [
     pkgs.zig
+    pkgs.zls
     pkgs.clang
     pkgs.zsh
     pkgs.pkg-config
