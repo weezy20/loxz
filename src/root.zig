@@ -1,7 +1,4 @@
-pub const OpCode = enum {
-    OP_RETURN,
-};
-
+pub const OpCode = @import("opcode.zig").OpCode;
 pub const Chunk = @import("chunk.zig").Chunk;
 
 const std = @import("std");

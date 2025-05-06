@@ -1,4 +1,6 @@
 const std = @import("std");
+const dbg = std.debug.print;
+const debug = @import("debug.zig");
 const common = @import("common.zig");
 const Allocator = common.Allocator;
 const expect = common.expect;
@@ -58,25 +60,17 @@ pub const Chunk = struct {
 
     // Inspect a chunk
     pub fn disassemble(self: *const Chunk, name: ?[]const u8) !void {
-        const stdout = std.io.getStdOut().writer();
         if (name) |n| {
-            try stdout.print("{s} === ", .{n});
+            dbg("=== <{s}> ===\n", .{n});
         } else {
-            try stdout.print("chunk === ", .{});
+            dbg("=== <chunk> ===\n", .{});
         }
         var offset: usize = 0;
         while (offset < self.count) {
-            try stdout.print("{x} ", .{self.code[offset]});
-            offset += disassembleInstruction(self, offset);
+            offset += debug.disassembleInstruction(self, offset);
         }
-        try stdout.print(" ===\n", .{});
     }
 };
-
-/// Disassemble a single instruction and return next offset
-pub fn disassembleInstruction(_: *const Chunk, offset: usize) usize {
-    return offset + 1; // Placeholder for disassembly logic
-}
 
 test "Chunk initialization" {
     // Test Chunk initialization

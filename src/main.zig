@@ -13,14 +13,14 @@ pub fn main() !void {
             std.process.exit(1);
         }
     } else {
-        debug("Repl Mode\n", .{});
+        debug("Dev Mode\n", .{});
     }
     var chunk = lib.Chunk.init();
     defer chunk.deinit(gpa.allocator());
-    for (1..10) |i| {
+    for (0..1) |i| {
         try chunk.write(@intCast(i), gpa.allocator());
     }
-    try chunk.disassemble(null);
+    try chunk.disassemble("test chunk");
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode
