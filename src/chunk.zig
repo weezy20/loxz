@@ -55,7 +55,28 @@ pub const Chunk = struct {
         self.code = new_mem.ptr;
         self.capacity = new_capacity;
     }
+
+    // Inspect a chunk
+    pub fn disassemble(self: *const Chunk, name: ?[]const u8) !void {
+        const stdout = std.io.getStdOut().writer();
+        if (name) |n| {
+            try stdout.print("{s} === ", .{n});
+        } else {
+            try stdout.print("chunk === ", .{});
+        }
+        var offset: usize = 0;
+        while (offset < self.count) {
+            try stdout.print("{x} ", .{self.code[offset]});
+            offset += disassembleInstruction(self, offset);
+        }
+        try stdout.print(" ===\n", .{});
+    }
 };
+
+/// Disassemble a single instruction and return next offset
+pub fn disassembleInstruction(_: *const Chunk, offset: usize) usize {
+    return offset + 1; // Placeholder for disassembly logic
+}
 
 test "Chunk initialization" {
     // Test Chunk initialization

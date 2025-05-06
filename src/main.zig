@@ -15,6 +15,12 @@ pub fn main() !void {
     } else {
         debug("Repl Mode\n", .{});
     }
+    var chunk = lib.Chunk.init();
+    defer chunk.deinit(gpa.allocator());
+    for (1..10) |i| {
+        try chunk.write(@intCast(i), gpa.allocator());
+    }
+    try chunk.disassemble(null);
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode
