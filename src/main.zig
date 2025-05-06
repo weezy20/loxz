@@ -1,7 +1,6 @@
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-
     if (try file_or_repl(gpa.allocator())) |filename| {
         defer gpa.allocator().free(filename);
         if (validate_file(filename) catch |err| {
@@ -16,8 +15,6 @@ pub fn main() !void {
     } else {
         debug("Repl Mode\n", .{});
     }
-    const x = lib.OpCode.OP_RETURN;
-    _ = x;
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode

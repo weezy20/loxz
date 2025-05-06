@@ -25,7 +25,7 @@ pub const Chunk = struct {
         if (self.capacity > 0) {
             allocator.free(self.code[0..self.capacity]);
         }
-        self.* = init();
+        self.* = undefined; // Prevent's use after free during compilation
     }
 
     /// Write a byte to the chunk, growing if necessary
@@ -37,10 +37,10 @@ pub const Chunk = struct {
         self.count += 1;
     }
 
-    // All operations require explicit allocator
+    // Grow memory behind the chunk and bump up it's capacity accordingly
     pub fn grow(self: *Chunk, allocator: Allocator) !void {
         const new_capacity = if (self.capacity == 0) 8 else self.capacity * 2;
-        const new_mem = try allocator.alloc(u8, new_capacity);
+        const new_mem = try allocator.alignedAlloc(u8, @alignOf(u8), new_capacity);
 
         // Copy existing data if needed
         if (self.count > 0) {
@@ -62,7 +62,6 @@ test "Chunk initialization" {
     var chunk = Chunk.init();
     const allocator = std.testing.allocator;
     defer chunk.deinit(allocator);
-
     try expect(chunk.count == 0);
     try expect(chunk.capacity == 0);
     try expect(chunk.code[0] == undefined);
@@ -105,10 +104,11 @@ test "Chunk grow and deinit" {
     try expect(chunk.code[1] == 84);
 
     chunk.deinit(allocator);
-    // Check state after deinitialization
-    try expect(chunk.count == 0);
-    try expect(chunk.capacity == 0);
-    try expect(chunk.code == undefined);
+    // Check state after deinitialization,
+    // should fail now that zig runtime can see that deinit sets Chunk = undefined
+    // try expect(chunk.count == 0);
+    // try expect(chunk.capacity == 0);
+    // try expect(chunk.code == undefined);
 }
 
 test "chunk sanity check" {
