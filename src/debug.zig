@@ -28,7 +28,7 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize) usi
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
-    const stdout = std.io.getStdOut().writer();
+    const stdout = std.io.getStdErr().writer();
     stdout.print("{0s} idx : {1d: >4} [{2}]\n", .{ name, constant_index, constant_value }) catch {
         dbg("Failed to print constant", .{});
     };
