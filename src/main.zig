@@ -40,7 +40,7 @@ fn file_or_repl(allocator: std.mem.Allocator) !?[]u8 {
     defer std.process.argsFree(allocator, args);
 
     if (args.len == 2) {
-        // type corecion to path.resolve could also look like args[1][0..] -> []u8 then &.{ []u8 } for slice into array from anonymous struct literal
+        // type corecion to path.resolve could also look like args[1][0..] -> []u8 then &.{ []u8 } for slice into array into slice of slice
         // const path = try std.fs.path.resolve(allocator, &.{args[1][0..]});
         const path = try std.fs.path.resolve(allocator, &[_][]const u8{args[1][0..]});
         return path;
