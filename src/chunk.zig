@@ -1,7 +1,7 @@
 /// A bytecode chunk
 pub const Chunk = struct {
     /// Allocator for managing chunk memory
-    allocator: Allocator,
+    allocator: *const Allocator,
     /// Bytes used
     count: usize,
     /// Bytes allocated
@@ -12,7 +12,7 @@ pub const Chunk = struct {
     constants: ValueArray,
 
     /// Initialize a Chunk
-    pub fn init(allocator: Allocator) Chunk {
+    pub fn init(allocator: *const Allocator) Chunk {
         return Chunk{
             .allocator = allocator,
             .count = 0,
@@ -26,7 +26,7 @@ pub const Chunk = struct {
         if (self.capacity > 0) {
             self.allocator.free(self.code[0..self.capacity]);
         }
-        self.constants.deinit(self.allocator);
+        self.constants.deinit(self.allocator.*);
         self.* = undefined; // Prevent's use after free during compilation
     }
 
@@ -41,7 +41,7 @@ pub const Chunk = struct {
 
     /// Add a constant to the chunk returning the index
     pub fn addConstant(self: *Chunk, value: Value) !usize {
-        try self.constants.write(value, self.allocator);
+        try self.constants.write(value, self.allocator.*);
         return self.constants.count - 1;
     }
 
@@ -83,19 +83,19 @@ pub const Chunk = struct {
 test "Chunk initialization" {
     // Test Chunk initialization
     const allocator = std.testing.allocator;
-    var chunk = Chunk.init(allocator);
+    var chunk = Chunk.init(&allocator);
     defer chunk.deinit();
     try expect(chunk.count == 0);
     try expect(chunk.capacity == 0);
     try expect(chunk.code[0] == undefined);
 
-    // Test Chunk type size - 72 bytes
-    try expect(@sizeOf(Chunk) == 9 * @sizeOf(usize));
+    // Test Chunk type size - 64 bytes
+    try expect(@sizeOf(Chunk) == 64);
 }
 
 test "Chunk grow and deinit" {
     const allocator = std.testing.allocator;
-    var chunk = Chunk.init(allocator);
+    var chunk = Chunk.init(&allocator);
 
     // Initial state checks
     try expect(chunk.count == 0);
@@ -136,7 +136,7 @@ test "Chunk grow and deinit" {
 
 test "addConstants" {
     const allocator = std.testing.allocator;
-    var chunk = lib.Chunk.init(allocator);
+    var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
     std.debug.assert(try chunk.addConstant(
         lib.Value{ .String = "Hello" },
