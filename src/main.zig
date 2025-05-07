@@ -1,8 +1,10 @@
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
-    if (try file_or_repl(gpa.allocator())) |filename| {
-        defer gpa.allocator().free(filename);
+    const allocator = gpa.allocator();
+
+    if (try file_or_repl(allocator)) |filename| {
+        defer allocator.free(filename);
         if (validate_file(filename) catch |err| {
             debug("Error: {s}", .{@errorName(err)});
             std.process.exit(1);
@@ -16,11 +18,14 @@ pub fn main() !void {
         debug("Dev Mode\n", .{});
     }
     var chunk = lib.Chunk.init();
-    defer chunk.deinit(gpa.allocator());
+    defer chunk.deinit(allocator);
     for (0..1) |i| {
-        try chunk.write(@intCast(i), gpa.allocator());
+        try chunk.write(@intCast(i), allocator);
     }
     try chunk.disassemble("test chunk");
+    try chunk.constants.write(lib.Value{ .Number = 1.0 }, allocator);
+    try chunk.constants.write(lib.Value{ .String = "Hello" }, allocator);
+    try chunk.constants.write(lib.Value{ .Bool = true }, allocator);
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode

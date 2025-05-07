@@ -30,6 +30,7 @@ pub const Chunk = struct {
         if (self.capacity > 0) {
             allocator.free(self.code[0..self.capacity]);
         }
+        self.constants.deinit(allocator);
         self.* = undefined; // Prevent's use after free during compilation
     }
 

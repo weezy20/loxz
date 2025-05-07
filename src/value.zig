@@ -20,7 +20,7 @@ pub const ValueArray = struct {
         };
     }
 
-    pub fn deinit(self: *ValueArray, allocator: *const std.mem.Allocator) void {
+    pub fn deinit(self: *ValueArray, allocator: std.mem.Allocator) void {
         allocator.free(self.values);
         self.* = undefined;
     }
@@ -28,11 +28,12 @@ pub const ValueArray = struct {
     pub fn write(
         self: *ValueArray,
         value: Value,
-        allocator: *const std.mem.Allocator,
+        allocator: std.mem.Allocator,
     ) !void {
         if (self.count >= self.capacity) {
             const new_capacity = if (self.capacity == 0) 8 else self.capacity * 2;
             const new_values: []Value = try allocator.realloc(self.values, new_capacity);
+
             self.values = new_values;
             self.capacity = new_capacity;
         }
