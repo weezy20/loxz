@@ -1,12 +1,7 @@
-const std = @import("std");
-const dbg = std.debug.print;
-const debug = @import("debug.zig");
-const ValueArray = @import("value.zig").ValueArray;
-const Allocator = std.mem.Allocator;
-const expect = std.testing.expect;
-
 /// A bytecode chunk
 pub const Chunk = struct {
+    /// Allocator for managing chunk memory
+    allocator: Allocator,
     /// Bytes used
     count: usize,
     /// Bytes allocated
@@ -17,8 +12,9 @@ pub const Chunk = struct {
     constants: ValueArray,
 
     /// Initialize a Chunk
-    pub fn init() Chunk {
+    pub fn init(allocator: Allocator) Chunk {
         return Chunk{
+            .allocator = allocator,
             .count = 0,
             .capacity = 0,
             .code = undefined,
@@ -26,27 +22,35 @@ pub const Chunk = struct {
         };
     }
     /// Free the Chunk
-    pub fn deinit(self: *Chunk, allocator: Allocator) void {
+    pub fn deinit(self: *Chunk) void {
         if (self.capacity > 0) {
-            allocator.free(self.code[0..self.capacity]);
+            self.allocator.free(self.code[0..self.capacity]);
         }
-        self.constants.deinit(allocator);
+        self.constants.deinit(self.allocator);
         self.* = undefined; // Prevent's use after free during compilation
     }
 
     /// Write a byte to the chunk, growing if necessary
-    pub fn write(self: *Chunk, byte: u8, allocator: Allocator) !void {
+    pub fn write(self: *Chunk, byte: u8) !void {
         if (self.count >= self.capacity) {
-            try self.grow(allocator);
+            try self.grow();
         }
         self.code[self.count] = byte;
         self.count += 1;
     }
 
-    // Grow memory behind the chunk and bump up it's capacity accordingly
-    pub fn grow(self: *Chunk, allocator: Allocator) !void {
+    /// Add a constant to the chunk returning the index
+    pub fn addConstant(self: *Chunk, value: Value) !usize {
+        try self.constants.write(value, self.allocator);
+        return self.constants.count - 1;
+    }
+
+    /// Grow memory behind the chunk and bump up it's capacity accordingly
+    pub fn grow(
+        self: *Chunk,
+    ) !void {
         const new_capacity = if (self.capacity == 0) 8 else self.capacity * 2;
-        const new_mem = try allocator.alignedAlloc(u8, @alignOf(u8), new_capacity);
+        const new_mem = try self.allocator.alignedAlloc(u8, @alignOf(u8), new_capacity);
 
         // Copy existing data if needed
         if (self.count > 0) {
@@ -55,7 +59,7 @@ pub const Chunk = struct {
 
         // Free old memory if it existed
         if (self.capacity > 0) {
-            allocator.free(self.code[0..self.capacity]);
+            self.allocator.free(self.code[0..self.capacity]);
         }
 
         self.code = new_mem.ptr;
@@ -78,35 +82,35 @@ pub const Chunk = struct {
 
 test "Chunk initialization" {
     // Test Chunk initialization
-    var chunk = Chunk.init();
     const allocator = std.testing.allocator;
-    defer chunk.deinit(allocator);
+    var chunk = Chunk.init(allocator);
+    defer chunk.deinit();
     try expect(chunk.count == 0);
     try expect(chunk.capacity == 0);
     try expect(chunk.code[0] == undefined);
 
-    // Test Chunk type size - 56 bytes
-    try expect(@sizeOf(Chunk) == 7 * @sizeOf(usize));
+    // Test Chunk type size - 72 bytes
+    try expect(@sizeOf(Chunk) == 9 * @sizeOf(usize));
 }
 
 test "Chunk grow and deinit" {
-    var chunk = Chunk.init();
     const allocator = std.testing.allocator;
+    var chunk = Chunk.init(allocator);
 
     // Initial state checks
     try expect(chunk.count == 0);
     try expect(chunk.capacity == 0);
 
     // Grow the chunk
-    try chunk.grow(allocator);
+    try chunk.grow();
 
     // Check after growing
     try expect(chunk.capacity == 8);
     try expect(chunk.count == 0);
 
     // Write some bytes
-    try chunk.write(42, allocator);
-    try chunk.write(84, allocator);
+    try chunk.write(42);
+    try chunk.write(84);
 
     // Check after writing
     try expect(chunk.count == 2);
@@ -114,7 +118,7 @@ test "Chunk grow and deinit" {
     try expect(chunk.code[1] == 84);
 
     // Grow again
-    try chunk.grow(allocator);
+    try chunk.grow();
 
     // Check after second grow
     try expect(chunk.capacity == 16);
@@ -122,7 +126,7 @@ test "Chunk grow and deinit" {
     try expect(chunk.code[0] == 42);
     try expect(chunk.code[1] == 84);
 
-    chunk.deinit(allocator);
+    chunk.deinit();
     // Check state after deinitialization,
     // should fail now that zig runtime can see that deinit sets Chunk = undefined
     // try expect(chunk.count == 0);
@@ -130,6 +134,23 @@ test "Chunk grow and deinit" {
     // try expect(chunk.code == undefined);
 }
 
-test "chunk sanity check" {
-    try expect(true);
+test "addConstants" {
+    const allocator = std.testing.allocator;
+    var chunk = lib.Chunk.init(allocator);
+    defer chunk.deinit();
+    std.debug.assert(try chunk.addConstant(
+        lib.Value{ .String = "Hello" },
+    ) == 0);
+    std.debug.assert(try chunk.addConstant(
+        lib.Value{ .Bool = true },
+    ) == 1);
 }
+
+const lib = @import("root.zig");
+const std = @import("std");
+const dbg = std.debug.print;
+const debug = @import("debug.zig");
+const ValueArray = @import("value.zig").ValueArray;
+const Value = @import("value.zig").Value;
+const Allocator = std.mem.Allocator;
+const expect = std.testing.expect;

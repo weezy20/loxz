@@ -17,15 +17,12 @@ pub fn main() !void {
     } else {
         debug("Dev Mode\n", .{});
     }
-    var chunk = lib.Chunk.init();
-    defer chunk.deinit(allocator);
+    var chunk = lib.Chunk.init(allocator);
+    defer chunk.deinit();
     for (0..1) |i| {
-        try chunk.write(@intCast(i), allocator);
+        try chunk.write(@intCast(i));
     }
     try chunk.disassemble("test chunk");
-    try chunk.constants.write(lib.Value{ .Number = 1.0 }, allocator);
-    try chunk.constants.write(lib.Value{ .String = "Hello" }, allocator);
-    try chunk.constants.write(lib.Value{ .Bool = true }, allocator);
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode
