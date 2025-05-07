@@ -19,16 +19,15 @@ pub fn main() !void {
     }
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    // for (0..1) |i| {
-    //     try chunk.write(@intCast(i));
-    // }
-    const idx = try chunk.addConstant(lib.Value{ .Number = 1.0 });
+    const idx = try chunk.addConstant(lib.Value{ .Number = 1.0e10 });
     if (idx > std.math.maxInt(u8)) {
         debug("More than 256 constants in one chunk\n", .{});
         std.process.exit(1);
     }
-    try chunk.write(@intFromEnum(op.CONSTANT));
-    try chunk.write(@as(u8, @intCast(idx)));
+    try chunk.write(@intFromEnum(op.CONSTANT)); // Write 0x01 for CONSTANT
+    try chunk.write(@as(u8, @intCast(idx))); // Write the index of the constant in the constant pool
+    try chunk.write(0x0); // Write a return instruction
+
     try chunk.disassemble("test chunk");
 }
 
