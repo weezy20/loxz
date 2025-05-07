@@ -76,7 +76,7 @@ pub const Chunk = struct {
         }
         var offset: usize = 0;
         while (offset < self.count) {
-            offset += debug.disassembleInstruction(self, offset);
+            offset = debug.disassembleInstruction(self, offset);
         }
     }
 };

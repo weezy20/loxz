@@ -4,6 +4,22 @@ pub const Value = union(enum) {
     String: []const u8,
     Bool: bool,
     Nil,
+
+    pub fn format(
+        self: Value,
+        comptime fmt: []const u8,
+        options: std.fmt.FormatOptions,
+        writer: anytype,
+    ) !void {
+        _ = fmt;
+        _ = options;
+        switch (self) {
+            .Number => try writer.print("Number {d}", .{self.Number}),
+            .String => try writer.print("String \"{s}\"", .{self.String}),
+            .Bool => try writer.print("Bool {s}", .{if (self.Bool) "true" else "false"}),
+            .Nil => try writer.writeAll("Nil"),
+        }
+    }
 };
 
 /// Value Arrays

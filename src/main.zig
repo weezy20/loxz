@@ -26,7 +26,9 @@ pub fn main() !void {
     }
     try chunk.write(@intFromEnum(op.CONSTANT)); // Write 0x01 for CONSTANT
     try chunk.write(@as(u8, @intCast(idx))); // Write the index of the constant in the constant pool
-    try chunk.write(0x0); // Write a return instruction
+    try chunk.write(@as(u8, @intFromEnum(op.CONSTANT))); // Write the index of the constant in the constant pool
+    try chunk.write(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" })))); // Write the index of the constant in the constant pool
+    try chunk.write(@intFromEnum(op.RETURN)); // Write a return instruction
 
     try chunk.disassemble("test chunk");
 }
