@@ -1,9 +1,9 @@
 const std = @import("std");
 const dbg = std.debug.print;
 const debug = @import("debug.zig");
-const common = @import("common.zig");
-const Allocator = common.Allocator;
-const expect = common.expect;
+const ValueArray = @import("value.zig").ValueArray;
+const Allocator = std.mem.Allocator;
+const expect = std.testing.expect;
 
 /// A bytecode chunk
 pub const Chunk = struct {
@@ -13,6 +13,8 @@ pub const Chunk = struct {
     capacity: usize,
     /// Many-pointer to chunk data
     code: [*]u8,
+    /// Value Array for the chunk
+    constants: ValueArray,
 
     /// Initialize a Chunk
     pub fn init() Chunk {
@@ -20,6 +22,7 @@ pub const Chunk = struct {
             .count = 0,
             .capacity = 0,
             .code = undefined,
+            .constants = ValueArray.init() catch @panic("Failed to initialize ValueArray for Chunk"),
         };
     }
     /// Free the Chunk
@@ -81,8 +84,8 @@ test "Chunk initialization" {
     try expect(chunk.capacity == 0);
     try expect(chunk.code[0] == undefined);
 
-    // Test Chunk type size - 24 bytes
-    try expect(@sizeOf(Chunk) == 3 * @sizeOf(usize));
+    // Test Chunk type size - 56 bytes
+    try expect(@sizeOf(Chunk) == 7 * @sizeOf(usize));
 }
 
 test "Chunk grow and deinit" {
