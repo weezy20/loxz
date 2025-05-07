@@ -17,11 +17,18 @@ pub fn main() !void {
     } else {
         debug("Dev Mode\n", .{});
     }
-    var chunk = lib.Chunk.init(allocator);
+    var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    for (0..1) |i| {
-        try chunk.write(@intCast(i));
+    // for (0..1) |i| {
+    //     try chunk.write(@intCast(i));
+    // }
+    const idx = try chunk.addConstant(lib.Value{ .Number = 1.0 });
+    if (idx > std.math.maxInt(u8)) {
+        debug("More than 256 constants in one chunk\n", .{});
+        std.process.exit(1);
     }
+    try chunk.write(@intFromEnum(op.CONSTANT));
+    try chunk.write(@as(u8, @intCast(idx)));
     try chunk.disassemble("test chunk");
 }
 
@@ -67,3 +74,4 @@ fn validate_file(file: []const u8) !bool {
 const lib = @import("loxz");
 const std = @import("std");
 const debug = std.debug.print;
+const op = lib.OpCode;

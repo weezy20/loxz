@@ -40,9 +40,10 @@ pub const Chunk = struct {
     }
 
     /// Add a constant to the chunk returning the index
-    pub fn addConstant(self: *Chunk, value: Value) !usize {
+    pub fn addConstant(self: *Chunk, value: Value) !u9 {
         try self.constants.write(value, self.allocator.*);
-        return self.constants.count - 1;
+        const index = @as(u9, @intCast(self.constants.count - 1));
+        return index;
     }
 
     /// Grow memory behind the chunk and bump up it's capacity accordingly

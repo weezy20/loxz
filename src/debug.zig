@@ -12,10 +12,22 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize) usize {
         .RETURN => {
             return simpleInstruction("OP_RETURN", offset);
         },
+        .CONSTANT => {
+            return constantInstruction("OP_CONSTANT", chunk, offset);
+        },
     }
 }
 
 fn simpleInstruction(name: []const u8, offset: usize) usize {
     dbg("{s}\n", .{name});
     return offset + 1;
+}
+
+fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize) usize {
+    const constant_index = chunk.code[offset + 1]; // Skip 1 byte for OP_CONSTANT
+    const constant_value = chunk.constants.get(constant_index) catch |err| {
+        std.debug.panic("Error getting constant: {}", .{err});
+    }; // Look up the constant with bounds check
+    dbg("{s} {}\n", .{ name, constant_value });
+    return offset + 2;
 }

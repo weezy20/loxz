@@ -41,6 +41,13 @@ pub const ValueArray = struct {
         self.values[self.count] = value;
         self.count += 1;
     }
+
+    pub fn get(self: *const ValueArray, index: usize) !Value {
+        if (index >= self.count) {
+            return error.ValueIndexOutOfBounds;
+        }
+        return self.values[index];
+    }
 };
 
 test "ValueArray" {
