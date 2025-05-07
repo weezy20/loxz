@@ -29,7 +29,7 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize) usi
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
     const stdout = std.io.getStdOut().writer();
-    stdout.print("{s} [{}]\n", .{ name, constant_value }) catch {
+    stdout.print("{0s} idx : {1d: >4} [{2}]\n", .{ name, constant_index, constant_value }) catch {
         dbg("Failed to print constant", .{});
     };
     return offset + 2;
