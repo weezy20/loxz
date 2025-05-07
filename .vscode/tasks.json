@@ -1,0 +1,21 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "zig build",
+            "type": "shell",
+            "command": "zig build",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": [],
+            "detail": "Build the project using Zig"
+        },
+        {
+            "label": "cleanup",
+            "type": "shell",
+            "command": "echo 'Cleanup complete'"
+        }
+    ]
+}

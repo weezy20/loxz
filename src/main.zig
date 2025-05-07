@@ -6,22 +6,22 @@ pub fn main() !void {
     if (try file_or_repl(allocator)) |filename| {
         defer allocator.free(filename);
         if (validate_file(filename) catch |err| {
-            debug("Error: {s}", .{@errorName(err)});
+            dbg("Error: {s}", .{@errorName(err)});
             std.process.exit(1);
         }) {
-            debug("Running loxz on File: {s}\n", .{filename});
+            dbg("Running loxz on File: {s}\n", .{filename});
         } else {
-            debug("Invalid file extension, exiting...", .{});
+            dbg("Invalid file extension, exiting...", .{});
             std.process.exit(1);
         }
     } else {
-        debug("Dev Mode\n", .{});
+        dbg("Dev Mode\n", .{});
     }
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
     const idx = try chunk.addConstant(lib.Value{ .Number = 1.0e10 });
     if (idx > std.math.maxInt(u8)) {
-        debug("More than 256 constants in one chunk\n", .{});
+        dbg("More than 256 constants in one chunk\n", .{});
         std.process.exit(1);
     }
     try chunk.write(@intFromEnum(op.CONSTANT)); // Write 0x01 for CONSTANT
@@ -43,7 +43,7 @@ fn file_or_repl(allocator: std.mem.Allocator) !?[]u8 {
         const path = try std.fs.path.resolve(allocator, &[_][]const u8{args[1][0..]});
         return path;
     } else if (args.len > 2) {
-        debug("Usage: loxz <file.lox>", .{});
+        dbg("Usage: loxz <file.lox>", .{});
     }
     return null;
 }
@@ -72,5 +72,5 @@ fn validate_file(file: []const u8) !bool {
 
 const lib = @import("loxz");
 const std = @import("std");
-const debug = std.debug.print;
+const dbg = std.debug.print;
 const op = lib.OpCode;
