@@ -39,7 +39,7 @@ pub const Chunk = struct {
             .start_column = span[0],
             .end_column = span[1],
         };
-        try debugInfo.locations.append(location);
+        try debugInfo.addLocation(location);
     }
 
     /// Write a byte to the chunk, growing if necessary
@@ -52,14 +52,15 @@ pub const Chunk = struct {
     }
 
     /// Add a constant to chunk with DebugInfo
-    pub fn addConstantWithDebugInfo(self: *Chunk, value: Value, debugInfo: *DebugInfo, line: usize, column: usize) !u9 {
+    pub fn addConstantWithDebugInfo(self: *Chunk, value: Value, debugInfo: *DebugInfo, line: usize, span: [2]usize) !u9 {
         const index = @as(usize, try self.addConstant(value)); // Safe to upcast to usize
         const location = DebugInfo.Location{
             .offset = index,
             .line = line,
-            .column = column,
+            .start_column = span[0],
+            .end_column = span[1],
         };
-        try debugInfo.locations.append(location);
+        try debugInfo.addLocation(location);
         return index;
     }
 

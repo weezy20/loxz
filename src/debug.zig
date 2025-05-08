@@ -82,6 +82,11 @@ pub const DebugInfo = struct {
     pub fn deinit(self: *DebugInfo) void {
         self.locations.deinit();
     }
+
+    /// Add a location to DebugInfo
+    pub fn addLocation(self: *DebugInfo, location: Location) !void {
+        try self.locations.append(location);
+    }
 };
 // If chunk.write() succeeds, we update the DebugInfo.locations[chunk.count] with the recently consumed location
 
