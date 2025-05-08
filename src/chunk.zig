@@ -30,6 +30,17 @@ pub const Chunk = struct {
         self.* = undefined; // Prevent's use after free during compilation
     }
 
+    /// Write a bytecode to the chunk, with DebugInfo
+    pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, column: usize) !void {
+        try self.write(byte);
+        const location = Location{
+            .offset = self.count - 1,
+            .line = line,
+            .column = column,
+        };
+        try debugInfo.locations.append(location);
+    }
+
     /// Write a byte to the chunk, growing if necessary
     pub fn write(self: *Chunk, byte: u8) !void {
         if (self.count >= self.capacity) {
@@ -37,6 +48,18 @@ pub const Chunk = struct {
         }
         self.code[self.count] = byte;
         self.count += 1;
+    }
+
+    /// Add a constant to chunk with DebugInfo
+    pub fn addConstantWithDebugInfo(self: *Chunk, value: Value, debugInfo: *DebugInfo, line: usize, column: usize) !u9 {
+        const index = @as(usize, try self.addConstant(value)); // Safe to upcast to usize
+        const location = DebugInfo.Location{
+            .offset = index,
+            .line = line,
+            .column = column,
+        };
+        try debugInfo.locations.append(location);
+        return index;
     }
 
     /// Add a constant to the chunk returning the index
@@ -67,17 +90,15 @@ pub const Chunk = struct {
         self.capacity = new_capacity;
     }
 
-    // Inspect a chunk
-    pub fn disassemble(self: *const Chunk, name: ?[]const u8) !void {
+    /// Inspect a chunk
+    pub fn disassemble(self: *const Chunk, name: ?[]const u8, debugInfo: ?*DebugInfo) !void {
         if (name) |n| {
             dbg("=== <{s}> ===\n", .{n});
         } else {
             dbg("=== <chunk> ===\n", .{});
         }
         var offset: usize = 0;
-        while (offset < self.count) {
-            offset = debug.disassembleInstruction(self, offset);
-        }
+        while (offset < self.count) : (offset = debug.disassembleInstruction(self, offset, debugInfo)) {}
     }
 };
 
@@ -155,3 +176,5 @@ const ValueArray = @import("value.zig").ValueArray;
 const Value = @import("value.zig").Value;
 const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
+const DebugInfo = debug.DebugInfo;
+const Location = debug.Location;

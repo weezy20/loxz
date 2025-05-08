@@ -24,13 +24,13 @@ pub fn main() !void {
         dbg("More than 256 constants in one chunk\n", .{});
         std.process.exit(1);
     }
-    try chunk.write(@intFromEnum(op.CONSTANT)); // Write 0x01 for CONSTANT
-    try chunk.write(@as(u8, @intCast(idx))); // Write the index of the constant in the constant pool
-    try chunk.write(@as(u8, @intFromEnum(op.CONSTANT))); // Write the index of the constant in the constant pool
-    try chunk.write(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" })))); // Write the index of the constant in the constant pool
-    try chunk.write(@intFromEnum(op.RETURN)); // Write a return instruction
+    var debugInfo = try lib.DebugInfo.init(allocator, 8);
+    defer debugInfo.deinit();
+    try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, 0); // Write the index of the constant in the constant pool
+    try chunk.writeWithDebugInfo(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" }))), &debugInfo, 1, 5); // Write the index of the constant in the constant pool
+    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, 0); // Write a return instruction
 
-    try chunk.disassemble("test chunk");
+    try chunk.disassemble("test chunk", &debugInfo);
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode
