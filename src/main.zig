@@ -26,9 +26,9 @@ pub fn main() !void {
     }
     var debugInfo = try lib.DebugInfo.init(allocator, 8);
     defer debugInfo.deinit();
-    try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, 0); // Write the index of the constant in the constant pool
-    try chunk.writeWithDebugInfo(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" }))), &debugInfo, 1, 5); // Write the index of the constant in the constant pool
-    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, 0); // Write a return instruction
+    try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, .{ 0, 6 }); // Write the index of the constant in the constant pool
+    try chunk.writeWithDebugInfo(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" }))), &debugInfo, 1, .{ 5, 6 }); // Write the index of the constant in the constant pool
+    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
 
     try chunk.disassemble("test chunk", &debugInfo);
 }

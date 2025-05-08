@@ -31,12 +31,13 @@ pub const Chunk = struct {
     }
 
     /// Write a bytecode to the chunk, with DebugInfo
-    pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, column: usize) !void {
+    pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, span: [2]usize) !void {
         try self.write(byte);
         const location = Location{
             .offset = self.count - 1,
             .line = line,
-            .column = column,
+            .start_column = span[0],
+            .end_column = span[1],
         };
         try debugInfo.locations.append(location);
     }

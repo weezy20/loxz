@@ -10,7 +10,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*D
             break :blk EMPTY;
         };
 
-        const str = std.fmt.allocPrint(allocator, "(line:{d} col:{d})", .{ location.line, location.column }) catch DEBUG_ALLOC_FAILED;
+        const str = std.fmt.allocPrint(allocator, "(line:{d} col:{d}-{d})", .{ location.line, location.start_column, location.end_column }) catch DEBUG_ALLOC_FAILED;
 
         break :blk str;
     } else EMPTY;
@@ -52,7 +52,9 @@ pub const Location = struct {
     /// Source line number generating the bytecode at offset
     line: usize,
     /// Column number generating the bytecode at offset
-    column: usize,
+    start_column: usize,
+    /// End column number generating the bytecode at offset
+    end_column: usize,
 };
 
 // Because our chunk writes instructions as a byte, each byte in chunk.code is at an index which can be traced back to a location
