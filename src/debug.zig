@@ -174,6 +174,30 @@ pub const DebugInfo = struct {
         return null;
     }
 
+    /// Get line of source code given a bytecode offset. This is a simpler version of `getLocation`
+    pub fn getLine(self: *DebugInfo, offset: usize) ?usize {
+        const line_runs = self.line_runs.items;
+
+        // Find line run for containing this offset
+        var low: usize = 0;
+        var high: usize = line_runs.len;
+
+        while (low < high) {
+            const mid = low + (high - low) / 2;
+            const run = line_runs[mid];
+
+            if (offset < run.start_offset) {
+                high = mid;
+            } else if (offset >= run.start_offset + run.length) {
+                low = mid + 1;
+            } else {
+                return run.line;
+            }
+        }
+
+        return null;
+    }
+
     /// Add a location to DebugInfo (now using compressed format)
     pub fn addLocation(self: *DebugInfo, location: Location) !void {
         // Always add column information
