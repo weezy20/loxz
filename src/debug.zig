@@ -109,10 +109,12 @@ pub const DebugInfo = struct {
     /// Get location for a given bytecode offset
     pub fn getLocation(self: *DebugInfo, offset: usize) ?Location {
         const BIN_SEARCH_THRESHOLD = 50;
-        // Find the line run containing this offset
         const line_runs = self.line_runs.items;
+
+        // Find line run for containing this offset
         var low: usize = 0;
         var high: usize = line_runs.len;
+        var found_run: ?LineRun = null;
 
         while (low < high) {
             const mid = low + (high - low) / 2;
@@ -123,50 +125,49 @@ pub const DebugInfo = struct {
             } else if (offset >= run.start_offset + run.length) {
                 low = mid + 1;
             } else {
-                // Found the run - now find column info
-                const col_spans = self.col_spans.items;
-                var column_info = ColumnSpan{
-                    .offset = 0,
-                    .start_column = 0,
-                    .end_column = 0,
-                };
-                if (col_spans.len < BIN_SEARCH_THRESHOLD) {
-                    // Linear search for column info
-                    for (self.col_spans.items) |col| {
-                        if (col.offset == offset) {
-                            column_info = col;
-                            break;
-                        }
-                    }
-                } else {
-                    // Binary search for column info
-                    low = 0;
-                    high = col_spans.len;
+                found_run = run;
+                break;
+            }
+        }
 
-                    while (low < high) {
-                        const mid2 = low + (high - low) / 2;
-                        const col = col_spans[mid2];
+        const run = found_run orelse return null;
 
-                        if (offset < col.offset) {
-                            high = mid2;
-                        } else if (offset >= col.offset + 1) {
-                            low = mid2 + 1;
-                        } else {
-                            column_info = col;
-                            break;
-                        }
-                    }
-                    if (column_info.offset == 0) {
-                        // If we didn't find it, return an error
-                        return null;
-                    }
+        // Find column info
+        const col_spans = self.col_spans.items;
+
+        if (col_spans.len < BIN_SEARCH_THRESHOLD) {
+            // Linear search for column info
+            for (col_spans) |col| {
+                if (col.offset == offset) {
+                    return Location{
+                        .offset = offset,
+                        .line = run.line,
+                        .start_column = col.start_column,
+                        .end_column = col.end_column,
+                    };
                 }
-                return Location{
-                    .offset = offset,
-                    .line = run.line,
-                    .start_column = column_info.start_column,
-                    .end_column = column_info.end_column,
-                };
+            }
+        } else {
+            // Binary search for column info
+            low = 0;
+            high = col_spans.len;
+
+            while (low < high) {
+                const mid = low + (high - low) / 2;
+                const col = col_spans[mid];
+
+                if (offset < col.offset) {
+                    high = mid;
+                } else if (offset > col.offset) {
+                    low = mid + 1;
+                } else {
+                    return Location{
+                        .offset = offset,
+                        .line = run.line,
+                        .start_column = col.start_column,
+                        .end_column = col.end_column,
+                    };
+                }
             }
         }
 
