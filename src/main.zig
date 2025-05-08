@@ -24,7 +24,7 @@ pub fn main() !void {
         dbg("More than 256 constants in one chunk\n", .{});
         std.process.exit(1);
     }
-    var debugInfo = try lib.DebugInfo.init(allocator, 8);
+    var debugInfo = try lib.DebugInfo.init(allocator, 8, 8);
     defer debugInfo.deinit();
     try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, .{ 0, 6 }); // Write the index of the constant in the constant pool
     try chunk.writeWithDebugInfo(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" }))), &debugInfo, 1, .{ 5, 6 }); // Write the index of the constant in the constant pool

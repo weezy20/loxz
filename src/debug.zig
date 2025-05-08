@@ -5,8 +5,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*D
     const instruction = chunk.code[offset];
 
     const source = if (debugInfo) |d| blk: {
-        const location = d.getLocation(offset) catch |err| {
-            std.debug.print("Error getting location: {}\n", .{err});
+        const location: Location = if (d.getLocation(offset)) |loc| loc else {
+            std.debug.print("Error getting location\n", .{});
             break :blk EMPTY;
         };
 
@@ -45,7 +45,8 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, sou
     return offset + 2;
 }
 
-/// DebugInfo for chunk bytecode
+/// Location for chunk bytecode
+/// Used by write functions when creating bytecode for a given chunk
 pub const Location = struct {
     /// Offset in the bytecode of a given chunk
     offset: usize,
@@ -57,38 +58,149 @@ pub const Location = struct {
     end_column: usize,
 };
 
+/// Represents a run of instructions from the same line
+const LineRun = struct {
+    /// Starting offset of this run
+    start_offset: usize,
+    /// Number of instructions in this run
+    length: usize,
+    /// Source line number
+    line: usize,
+};
+
+/// Column information for an instruction, part of a `LineRun
+const ColumnSpan = struct {
+    /// Bytecode offset of the instruction in a chunk
+    offset: usize,
+    /// Span start
+    start_column: usize,
+    /// Span end
+    end_column: usize,
+};
+
 // Because our chunk writes instructions as a byte, each byte in chunk.code is at an index which can be traced back to a location
 // So we can use the byte-location as an index and thus locations[idx] points to each bytecode instruction or constant from source file
 /// DebugInfo created for a chunk tracks source code locations corresponding to bytecode instructions
 pub const DebugInfo = struct {
+    /// Compressed line information
+    line_runs: std.ArrayList(LineRun),
     /// Source line location indexed by bytecode offset
-    locations: std.ArrayList(Location),
-    pub fn init(allocator: std.mem.Allocator, capacity: usize) !DebugInfo {
-        const locations = try std.ArrayList(Location).initCapacity(allocator, capacity);
+    col_spans: std.ArrayList(ColumnSpan),
+
+    /// Initialize `DebugInfo` for a chunk. `line_capacity` and `col_capacity` are optional parameters to
+    /// initialize the corresponding arrays based on expected chunk size.
+    /// Defaults to 8 bytes if not provided
+    pub fn init(allocator: std.mem.Allocator, line_capacity: ?usize, col_capacity: ?usize) !DebugInfo {
+        const lc = if (line_capacity) |c| c else 8;
+        const cc = if (col_capacity) |c| c else 8;
+        const line_runs = try std.ArrayList(LineRun).initCapacity(allocator, lc);
+        const col_spans = try std.ArrayList(ColumnSpan).initCapacity(allocator, cc);
         return DebugInfo{
-            .locations = locations,
+            .line_runs = line_runs,
+            .col_spans = col_spans,
         };
+    }
+    /// Free the DebugInfo
+    pub fn deinit(self: *DebugInfo) void {
+        self.line_runs.deinit();
+        self.col_spans.deinit();
     }
 
     /// Get location for a given bytecode offset
-    pub fn getLocation(self: *DebugInfo, offset: usize) !Location {
-        if (offset >= self.locations.items.len) {
-            return error.OutOfBounds;
+    pub fn getLocation(self: *DebugInfo, offset: usize) ?Location {
+        const BIN_SEARCH_THRESHOLD = 50;
+        // Find the line run containing this offset
+        const line_runs = self.line_runs.items;
+        var low: usize = 0;
+        var high: usize = line_runs.len;
+
+        while (low < high) {
+            const mid = low + (high - low) / 2;
+            const run = line_runs[mid];
+
+            if (offset < run.start_offset) {
+                high = mid;
+            } else if (offset >= run.start_offset + run.length) {
+                low = mid + 1;
+            } else {
+                // Found the run - now find column info
+                const col_spans = self.col_spans.items;
+                var column_info = ColumnSpan{
+                    .offset = 0,
+                    .start_column = 0,
+                    .end_column = 0,
+                };
+                if (col_spans.len < BIN_SEARCH_THRESHOLD) {
+                    // Linear search for column info
+                    for (self.col_spans.items) |col| {
+                        if (col.offset == offset) {
+                            column_info = col;
+                            break;
+                        }
+                    }
+                } else {
+                    // Binary search for column info
+                    low = 0;
+                    high = col_spans.len;
+
+                    while (low < high) {
+                        const mid2 = low + (high - low) / 2;
+                        const col = col_spans[mid2];
+
+                        if (offset < col.offset) {
+                            high = mid2;
+                        } else if (offset >= col.offset + 1) {
+                            low = mid2 + 1;
+                        } else {
+                            column_info = col;
+                            break;
+                        }
+                    }
+                    if (column_info.offset == 0) {
+                        // If we didn't find it, return an error
+                        return null;
+                    }
+                }
+                return Location{
+                    .offset = offset,
+                    .line = run.line,
+                    .start_column = column_info.start_column,
+                    .end_column = column_info.end_column,
+                };
+            }
         }
-        std.debug.assert(offset == self.locations.items[offset].offset);
-        return self.locations.items[offset];
+
+        return null;
     }
 
-    pub fn deinit(self: *DebugInfo) void {
-        self.locations.deinit();
-    }
-
-    /// Add a location to DebugInfo
+    /// Add a location to DebugInfo (now using compressed format)
     pub fn addLocation(self: *DebugInfo, location: Location) !void {
-        try self.locations.append(location);
+        // Always add column information
+        try self.col_spans.append(.{
+            .offset = location.offset,
+            .start_column = location.start_column,
+            .end_column = location.end_column,
+        });
+
+        // Handle line runs compression
+        const line_runs = &self.line_runs;
+        if (line_runs.items.len > 0) {
+            const last_run = &line_runs.items[line_runs.items.len - 1];
+            if (last_run.line == location.line) {
+                // Extend the current run
+                last_run.length += 1;
+                return;
+            }
+        }
+
+        // Start a new run
+        try line_runs.append(.{
+            .start_offset = location.offset,
+            .length = 1,
+            .line = location.line,
+        });
     }
 };
-// If chunk.write() succeeds, we update the DebugInfo.locations[chunk.count] with the recently consumed location
 
 const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
