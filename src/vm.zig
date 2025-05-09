@@ -19,9 +19,9 @@ pub const VM = struct {
 };
 
 pub const InterpretResult = union(enum) {
-    OK: void,
-    COMPILE_ERROR: ?[]const u8,
-    RUNTIME_ERROR: ?[]const u8,
+    ok,
+    compile_error: ?[]const u8,
+    runtime_error: ?[]const u8,
 };
 
 const std = @import("std");
