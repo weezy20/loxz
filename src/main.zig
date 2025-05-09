@@ -20,12 +20,13 @@ pub fn main() !void {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
 
-    var debugInfo = try lib.DebugInfo.init(allocator, 8, 8);
+    var debugInfo = try lib.DebugInfo.init(allocator, 848484, 82123);
     defer debugInfo.deinit();
-    try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, .{ 0, 6 }); // Write the index of the constant in the constant pool
-    try chunk.writeWithDebugInfo(@as(u8, @intCast(try chunk.addConstant(lib.Value{ .String = "hello world" }))), &debugInfo, 1, .{ 5, 6 }); // Write the index of the constant in the constant pool
-    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
-    try chunk.write(@intFromEnum(op.RETURN));
+    for (0..300) |i| {
+        try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
+    }
+    // try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
+    // try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
     try chunk.disassemble("test chunk", &debugInfo);
 }
 

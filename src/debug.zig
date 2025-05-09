@@ -1,10 +1,16 @@
 /// Disassemble a single instruction and return next offset
-pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*DebugInfo) usize {
-    const allocator = std.heap.page_allocator;
-    dbg("0x{0X:0>4}\t", .{chunk.code[offset]});
-    const instruction = chunk.code[offset];
+pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, debugInfo: ?*DebugInfo, allocator: std.mem.Allocator) usize {
+    dbg("0x{0X:0>4}\t", .{chunk.code[byte_offset]});
+    const instruction = chunk.code[byte_offset];
 
-    const source = if (debugInfo) |d| blk: {
+    const src_info = if (debugInfo) |d| blk: {
+        // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
+        // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`
+        // +1 for skipping opcode
+        const offset = switch (@as(OpCode, @enumFromInt(instruction))) {
+            .CONSTANT, .CONSTANT_LONG => byte_offset + 1,
+            else => byte_offset,
+        };
         const location: Location = if (d.getLocation(offset)) |loc| loc else {
             break :blk EMPTY;
         };
@@ -16,16 +22,16 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*D
 
     defer {
         // Free source if it was allocated
-        if (source.ptr != EMPTY.ptr and source.ptr != DEBUG_ALLOC_FAILED.ptr) {
-            allocator.free(source);
+        if (src_info.ptr != EMPTY.ptr and src_info.ptr != DEBUG_ALLOC_FAILED.ptr) {
+            allocator.free(src_info);
         }
     }
 
     switch (@as(OpCode, @enumFromInt(instruction))) {
-        .RETURN => return simpleInstruction("OP_RETURN", offset, source),
-        .CONSTANT => return constantInstruction("OP_CONSTANT", chunk, offset, source),
+        .RETURN => return simpleInstruction("OP_RETURN", byte_offset, src_info),
+        .CONSTANT => return constantInstruction("OP_CONSTANT", chunk, byte_offset, src_info),
         // TODO: Separate this out to constantLongInstruction
-        .CONSTANT_LONG => return constantInstruction("OP_CONSTANT_LONG", chunk, offset, source),
+        .CONSTANT_LONG => return constantLongInstruction("OP_CONSTANT_LONG", chunk, byte_offset, src_info),
     }
 }
 
@@ -44,6 +50,26 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src
         dbg("Failed to print constant", .{});
     };
     return offset + 2;
+}
+
+fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const constant_index: u24 =
+        (@as(u24, chunk.code[offset + 1]) << 16) |
+        (@as(u24, chunk.code[offset + 2]) << 8) |
+        @as(u24, chunk.code[offset + 3]);
+
+    const constant_value = chunk.constants.get(constant_index) catch |err| {
+        std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
+    };
+
+    const stdout = std.io.getStdErr().writer();
+    stdout.print("{0s} (const idx : {1d}) [{2}]  {3s}\n", .{
+        name, constant_index, constant_value, src_info,
+    }) catch {
+        dbg("Failed to print constant", .{});
+    };
+
+    return offset + 4; // 1 for opcode, 3 for u24 index
 }
 
 /// Location for chunk bytecode

@@ -51,40 +51,15 @@ pub const Chunk = struct {
         self.count += 1;
     }
 
-    /// Add a constant to chunk with DebugInfo
-    pub fn addConstantWithDebugInfo(self: *Chunk, value: Value, debugInfo: *DebugInfo, line: usize, span: [2]usize) !u9 {
-        const index = @as(usize, try self.addConstant(value)); // Safe to upcast to usize
-        const location = DebugInfo.Location{
-            .offset = index,
-            .line = line,
-            .start_column = span[0],
-            .end_column = span[1],
-        };
-        try debugInfo.addLocation(location);
-        return index;
-    }
-    /// Add a constant to the chunk returning a u8 index. Useful only testing or for small chunks with a newly initialized ValueArray
-    /// Can index up to 256 constants (u8 max).
-    /// If the ValueArray is being reused and exceeds 256 constants, and this function is called it will be a `Exceed256Constants` error.
-    /// Use `writeConstant` for writing upto 2^24 constants
-    pub fn addConstant(self: *Chunk, value: Value) !u8 {
-        if (self.constants.count >= 256) {
-            return error.Exceed256Constants;
-        }
-        try self.constants.write(value, self.allocator.*);
-        const index = @as(u8, @intCast(self.constants.count - 1));
-        return index;
-    }
-
     /// Write a constant to the chunk, uses OP_CONSTANT with 8 bits or OP_CONSTANT_LONG with 24 bits for index
-    pub fn writeConstant(self: *Chunk, value: Value) !void {
+    pub fn writeConstant(self: *Chunk, value: Value, debugInfo: ?*DebugInfo, line: ?usize, span: ?[2]usize) !void {
         if (self.constants.count + 1 >= (1 << 24)) {
             return error.Exceed24BitsIndex;
         }
         // Write the constant to ValueArray
         try self.constants.write(value, self.allocator.*);
         const idx: usize = self.constants.count - 1;
-
+        const const_offset = self.count + 1; // +1 for skipping opcode
         // Write opcode
         if (idx <= 255) {
             try self.write(@intFromEnum(OpCode.CONSTANT));
@@ -95,6 +70,16 @@ pub const Chunk = struct {
             try self.write(@as(u8, @truncate(idx >> 16))); // bits 16-23
             try self.write(@as(u8, @truncate(idx >> 8))); // bits 8-15
             try self.write(@as(u8, @truncate(idx))); // bits 0-7
+        }
+        // Write debug info if provided
+        if (debugInfo) |d| {
+            const location = Location{
+                .offset = const_offset,
+                .line = line orelse 0,
+                .start_column = if (span) |s| s[0] else 0,
+                .end_column = if (span) |s| s[1] else 0,
+            };
+            try d.addLocation(location);
         }
     }
 
@@ -127,7 +112,10 @@ pub const Chunk = struct {
             dbg("=== <chunk> ===\n", .{});
         }
         var offset: usize = 0;
-        while (offset < self.count) : (offset = debug.disassembleInstruction(self, offset, debugInfo)) {}
+        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+        defer _ = gpa.deinit();
+        const allocator = gpa.allocator();
+        while (offset < self.count) : (offset = debug.disassembleInstruction(self, offset, debugInfo, allocator)) {}
     }
 };
 
@@ -183,30 +171,6 @@ test "Chunk grow and deinit" {
     // try expect(chunk.count == 0);
     // try expect(chunk.capacity == 0);
     // try expect(chunk.code == undefined);
-}
-
-test "addConstants" {
-    const allocator = std.testing.allocator;
-    var chunk = lib.Chunk.init(&allocator);
-    defer chunk.deinit();
-    std.debug.assert(try chunk.addConstant(
-        lib.Value{ .String = "Hello" },
-    ) == 0);
-    std.debug.assert(try chunk.addConstant(
-        lib.Value{ .Bool = true },
-    ) == 1);
-}
-
-test "addConstants errors crossing u8 limit" {
-    const allocator = std.testing.allocator;
-    var chunk = lib.Chunk.init(&allocator);
-    defer chunk.deinit();
-    for (0..256) |i| {
-        _ = try chunk.addConstant(lib.Value{ .Number = @floatFromInt(i) });
-    }
-    const should_err = chunk.addConstant(lib.Value{ .Number = 256 });
-    // This should fail as we are trying to add 256th constant
-    try std.testing.expectError(error.Exceed256Constants, should_err);
 }
 
 const lib = @import("root.zig");
