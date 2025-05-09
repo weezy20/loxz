@@ -1,9 +1,9 @@
 pub const VM = struct {
     chunks: std.ArrayList(Chunk),
 
-    pub fn init(allocator: std.mem.Allocator) !VM {
+    pub fn init(allocator: std.mem.Allocator, capacity: ?usize) !VM {
         return VM{
-            .chunks = try std.ArrayList(Chunk).initCapacity(allocator, 1),
+            .chunks = try std.ArrayList(Chunk).initCapacity(allocator, capacity orelse 8),
         };
     }
     pub fn deinit(self: *VM) void {

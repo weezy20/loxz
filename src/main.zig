@@ -17,19 +17,21 @@ pub fn main() !void {
     } else {
         dbg("Dev Mode\n", .{});
     }
-    var vm = try lib.VM.init(allocator);
+    var vm = try lib.VM.init(allocator, null);
     defer vm.deinit();
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit(); // deinit of chunk is now handled by VM
 
-    // var debugInfo = try lib.DebugInfo.init(allocator, 848484, 82123);
-    // defer debugInfo.deinit();
+    var debugInfo = try lib.DebugInfo.init(allocator, .{
+        .line_capacity = 1,
+    });
+    defer debugInfo.deinit();
     // for (0..300) |i| {
     //     try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
     // }
     // try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
-    // try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
-    // try chunk.disassemble("test chunk", &debugInfo);
+    try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
+    try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {
         .ok => {},

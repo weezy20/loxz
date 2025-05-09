@@ -114,12 +114,19 @@ pub const DebugInfo = struct {
     /// Source line location indexed by bytecode offset
     col_spans: std.ArrayList(ColumnSpan),
 
+    pub const InitCapacity = struct {
+        /// Initial capacity for line runs
+        line_capacity: ?usize = null,
+        /// Initial capacity for column spans
+        col_capacity: ?usize = null,
+    };
+
     /// Initialize `DebugInfo` for a chunk. `line_capacity` and `col_capacity` are optional parameters to
     /// initialize the corresponding arrays based on expected chunk size.
     /// Defaults to 8 bytes if not provided
-    pub fn init(allocator: std.mem.Allocator, line_capacity: ?usize, col_capacity: ?usize) !DebugInfo {
-        const lc = if (line_capacity) |c| c else 8;
-        const cc = if (col_capacity) |c| c else 8;
+    pub fn init(allocator: std.mem.Allocator, options: InitCapacity) !DebugInfo {
+        const lc = options.line_capacity orelse 8;
+        const cc = options.col_capacity orelse 8;
         const line_runs = try std.ArrayList(LineRun).initCapacity(allocator, lc);
         const col_spans = try std.ArrayList(ColumnSpan).initCapacity(allocator, cc);
         return DebugInfo{
