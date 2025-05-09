@@ -19,11 +19,7 @@ pub fn main() !void {
     }
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const idx = try chunk.addConstant(lib.Value{ .Number = 1.0e10 });
-    if (idx > std.math.maxInt(u8)) {
-        dbg("More than 256 constants in one chunk\n", .{});
-        std.process.exit(1);
-    }
+
     var debugInfo = try lib.DebugInfo.init(allocator, 8, 8);
     defer debugInfo.deinit();
     try chunk.writeWithDebugInfo(@as(u8, @intFromEnum(op.CONSTANT)), &debugInfo, 1, .{ 0, 6 }); // Write the index of the constant in the constant pool

@@ -24,21 +24,23 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*D
     switch (@as(OpCode, @enumFromInt(instruction))) {
         .RETURN => return simpleInstruction("OP_RETURN", offset, source),
         .CONSTANT => return constantInstruction("OP_CONSTANT", chunk, offset, source),
+        // TODO: Separate this out to constantLongInstruction
+        .CONSTANT_LONG => return constantInstruction("OP_CONSTANT_LONG", chunk, offset, source),
     }
 }
 
-fn simpleInstruction(name: []const u8, offset: usize, source: []const u8) usize {
-    dbg("{s}\t{1s}\n", .{ name, source });
+fn simpleInstruction(name: []const u8, offset: usize, src_info: []const u8) usize {
+    dbg("{s}\t{1s}\n", .{ name, src_info });
     return offset + 1;
 }
 
-fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, source: []const u8) usize {
+fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
     const constant_index = chunk.code[offset + 1]; // Skip 1 byte for OP_CONSTANT
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
     const stdout = std.io.getStdErr().writer();
-    stdout.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, source }) catch {
+    stdout.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
         dbg("Failed to print constant", .{});
     };
     return offset + 2;

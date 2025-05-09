@@ -63,11 +63,15 @@ pub const Chunk = struct {
         try debugInfo.addLocation(location);
         return index;
     }
-
     /// Add a constant to the chunk returning the index
-    pub fn addConstant(self: *Chunk, value: Value) !u9 {
+    /// Can store only up to 256 constants (u8 max)
+    /// Returns error.ValueIndexOutOfBounds if trying to add 256th constant
+    pub fn addConstant(self: *Chunk, value: Value) !u8 {
+        if (self.constants.count >= 256) {
+            return error.Exceed256Constants;
+        }
         try self.constants.write(value, self.allocator.*);
-        const index = @as(u9, @intCast(self.constants.count - 1));
+        const index = @as(u8, @intCast(self.constants.count - 1));
         return index;
     }
 
@@ -168,6 +172,18 @@ test "addConstants" {
     std.debug.assert(try chunk.addConstant(
         lib.Value{ .Bool = true },
     ) == 1);
+}
+
+test "addConstants errors crossing u8 limit" {
+    const allocator = std.testing.allocator;
+    var chunk = lib.Chunk.init(&allocator);
+    defer chunk.deinit();
+    for (0..256) |i| {
+        _ = try chunk.addConstant(lib.Value{ .Number = @floatFromInt(i) });
+    }
+    const should_err = chunk.addConstant(lib.Value{ .Number = 256 });
+    // This should fail as we are trying to add 256th constant
+    try std.testing.expectError(error.Exceed256Constants, should_err);
 }
 
 const lib = @import("root.zig");
