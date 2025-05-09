@@ -11,10 +11,10 @@ pub const VM = struct {
     }
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
         if (chunk.count == 0) {
-            return InterpretResult.OK;
+            return .{ .compile_error = "Very big error" };
         }
         _ = self;
-        return InterpretResult.OK;
+        return InterpretResult.ok;
     }
 };
 

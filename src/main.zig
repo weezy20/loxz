@@ -32,13 +32,21 @@ pub fn main() !void {
     // try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {
-        .OK => {},
-        .COMPILE_ERROR => {
-            dbg("Compile Error\n", .{});
+        .ok => {},
+        .compile_error => |err_msg| {
+            if (err_msg) |msg| {
+                std.debug.print("Compiler Error: {s}\n", .{msg});
+            } else {
+                std.debug.print("Compiler Error: (no message)\n", .{});
+            }
             std.process.exit(5);
         },
-        .RUNTIME_ERROR => {
-            dbg("Runtime Error\n", .{});
+        .runtime_error => |err_msg| {
+            if (err_msg) |msg| {
+                std.debug.print("Runtime Error: {s}\n", .{msg});
+            } else {
+                std.debug.print("Runtime Error: (no message)\n", .{});
+            }
             std.process.exit(3);
         },
     }
