@@ -63,9 +63,10 @@ pub const Chunk = struct {
         try debugInfo.addLocation(location);
         return index;
     }
-    /// Add a constant to the chunk returning the index
-    /// Can store only up to 256 constants (u8 max)
-    /// Returns error.ValueIndexOutOfBounds if trying to add 256th constant
+    /// Add a constant to the chunk returning a u8 index. Useful only testing or for small chunks with a newly initialized ValueArray
+    /// Can index up to 256 constants (u8 max).
+    /// If the ValueArray is being reused and exceeds 256 constants, and this function is called it will be a `Exceed256Constants` error.
+    /// Use `writeConstant` for writing upto 2^24 constants
     pub fn addConstant(self: *Chunk, value: Value) !u8 {
         if (self.constants.count >= 256) {
             return error.Exceed256Constants;
@@ -73,6 +74,28 @@ pub const Chunk = struct {
         try self.constants.write(value, self.allocator.*);
         const index = @as(u8, @intCast(self.constants.count - 1));
         return index;
+    }
+
+    /// Write a constant to the chunk, uses OP_CONSTANT with 8 bits or OP_CONSTANT_LONG with 24 bits for index
+    pub fn writeConstant(self: *Chunk, value: Value) !void {
+        if (self.constants.count + 1 >= (1 << 24)) {
+            return error.Exceed24BitsIndex;
+        }
+        // Write the constant to ValueArray
+        try self.constants.write(value, self.allocator.*);
+        const idx: usize = self.constants.count - 1;
+
+        // Write opcode
+        if (idx <= 255) {
+            try self.write(@intFromEnum(OpCode.CONSTANT));
+            try self.write(@as(u8, @intCast(idx))); // Safe: checked <=255
+        } else {
+            try self.write(@intFromEnum(OpCode.CONSTANT_LONG));
+            // Big-endian 24-bit index
+            try self.write(@as(u8, @truncate(idx >> 16))); // bits 16-23
+            try self.write(@as(u8, @truncate(idx >> 8))); // bits 8-15
+            try self.write(@as(u8, @truncate(idx))); // bits 0-7
+        }
     }
 
     /// Grow memory behind the chunk and bump up it's capacity accordingly
@@ -196,3 +219,4 @@ const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 const DebugInfo = debug.DebugInfo;
 const Location = debug.Location;
+const OpCode = lib.OpCode;
