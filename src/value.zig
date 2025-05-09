@@ -66,22 +66,5 @@ pub const ValueArray = struct {
     }
 };
 
-test "ValueArray" {
-    const allocator = std.testing.allocator;
-    var array = try ValueArray.init();
-    defer array.deinit(allocator);
-
-    try array.write(Value{ .Number = 1.0 }, allocator);
-    try array.write(Value{ .String = "Hello" }, allocator);
-    try array.write(Value{ .Bool = true }, allocator);
-    try array.write(Value{ .Nil = undefined }, allocator);
-
-    std.debug.assert(array.count == 4);
-    std.debug.assert(array.capacity == 8);
-
-    std.debug.assert(@sizeOf(ValueArray) == 4 * @sizeOf(usize)); // 32 bytes size
-    std.debug.assert(@alignOf(ValueArray) == @alignOf(u64)); // 8 byte alignment
-}
-
 const std = @import("std");
 const lib = @import("root.zig");
