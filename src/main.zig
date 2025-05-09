@@ -17,6 +17,8 @@ pub fn main() !void {
     } else {
         dbg("Dev Mode\n", .{});
     }
+    var vm = try lib.VM.init(allocator);
+    defer vm.deinit();
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
 
@@ -28,6 +30,18 @@ pub fn main() !void {
     // try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
     // try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
     try chunk.disassemble("test chunk", &debugInfo);
+    const result = vm.interpret(&chunk);
+    switch (result) {
+        .OK => {},
+        .COMPILE_ERROR => {
+            dbg("Compile Error\n", .{});
+            std.process.exit(5);
+        },
+        .RUNTIME_ERROR => {
+            dbg("Runtime Error\n", .{});
+            std.process.exit(3);
+        },
+    }
 }
 
 /// Check cli args to decide to run loxz on file path or repl mode

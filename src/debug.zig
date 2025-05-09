@@ -4,10 +4,10 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, debugInfo
     const instruction = chunk.code[byte_offset];
 
     const src_info = if (debugInfo) |d| blk: {
-        // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
-        // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`
-        // +1 for skipping opcode
         const offset = switch (@as(OpCode, @enumFromInt(instruction))) {
+            // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
+            // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`
+            // +1 for skipping opcode
             .CONSTANT, .CONSTANT_LONG => byte_offset + 1,
             else => byte_offset,
         };
