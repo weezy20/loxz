@@ -6,7 +6,6 @@ pub fn disassembleInstruction(chunk: *const Chunk, offset: usize, debugInfo: ?*D
 
     const source = if (debugInfo) |d| blk: {
         const location: Location = if (d.getLocation(offset)) |loc| loc else {
-            std.debug.print("Error getting location\n", .{});
             break :blk EMPTY;
         };
 
