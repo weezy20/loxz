@@ -20,16 +20,16 @@ pub fn main() !void {
     var vm = try lib.VM.init(allocator);
     defer vm.deinit();
     var chunk = lib.Chunk.init(&allocator);
-    defer chunk.deinit();
+    defer chunk.deinit(); // deinit of chunk is now handled by VM
 
-    var debugInfo = try lib.DebugInfo.init(allocator, 848484, 82123);
-    defer debugInfo.deinit();
-    for (0..300) |i| {
-        try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
-    }
+    // var debugInfo = try lib.DebugInfo.init(allocator, 848484, 82123);
+    // defer debugInfo.deinit();
+    // for (0..300) |i| {
+    //     try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
+    // }
     // try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
     // try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
-    try chunk.disassemble("test chunk", &debugInfo);
+    // try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {
         .OK => {},

@@ -1,18 +1,19 @@
 pub const VM = struct {
-    chunk: *Chunk,
+    chunks: std.ArrayList(Chunk),
 
     pub fn init(allocator: std.mem.Allocator) !VM {
-        var chunk = Chunk.init(&allocator);
         return VM{
-            .chunk = &chunk,
+            .chunks = try std.ArrayList(Chunk).initCapacity(allocator, 1),
         };
     }
     pub fn deinit(self: *VM) void {
-        self.chunk.deinit();
+        self.chunks.deinit();
     }
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
+        if (chunk.count == 0) {
+            return InterpretResult.OK;
+        }
         _ = self;
-        _ = chunk;
         return InterpretResult.OK;
     }
 };
