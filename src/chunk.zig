@@ -83,6 +83,7 @@ pub const Chunk = struct {
         }
     }
     /// Given a `idx` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
+    /// in the ValueArray. If `idx` doesn't contain a constant opcode, return null.
     pub fn getConstantIdx(self: *const Chunk, idx: usize) ?usize {
         const instruction: OpCode = @enumFromInt(self.code[idx]);
         switch (instruction) {

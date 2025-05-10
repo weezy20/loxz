@@ -9,7 +9,7 @@ const expect = std.testing.expect;
 const expectEqual = std.testing.expectEqual;
 
 test "DebugInfo.addLocation creates new line run for new line" {
-    var debug_info = try DebugInfo.init(std.testing.allocator, null, null);
+    var debug_info = try DebugInfo.init(std.testing.allocator, .{});
     defer debug_info.deinit();
 
     // First location
@@ -51,7 +51,7 @@ test "DebugInfo.addLocation creates new line run for new line" {
 }
 
 test "DebugInfo.getLocation finds correct location" {
-    var debug_info = try DebugInfo.init(std.testing.allocator, null, null);
+    var debug_info = try DebugInfo.init(std.testing.allocator, .{});
     defer debug_info.deinit();
 
     // Add some locations
@@ -107,7 +107,7 @@ test "DebugInfo.getLocation finds correct location" {
 }
 
 test "DebugInfo.getLocation works with binary search for large spans" {
-    var debug_info = try DebugInfo.init(std.testing.allocator, null, null);
+    var debug_info = try DebugInfo.init(std.testing.allocator, .{});
     defer debug_info.deinit();
 
     // Add enough locations to trigger binary search
@@ -148,14 +148,14 @@ test "DebugInfo.getLocation works with binary search for large spans" {
 }
 
 test "DebugInfo.getLocation handles empty debug info" {
-    var debug_info = try DebugInfo.init(std.testing.allocator, null, null);
+    var debug_info = try DebugInfo.init(std.testing.allocator, .{});
     defer debug_info.deinit();
 
     try expect(debug_info.getLocation(0) == null);
 }
 
 test "DebugInfo.addLocation maintains correct column spans" {
-    var debug_info = try DebugInfo.init(std.testing.allocator, null, null);
+    var debug_info = try DebugInfo.init(std.testing.allocator, .{});
     defer debug_info.deinit();
 
     // Add locations with same line but different columns

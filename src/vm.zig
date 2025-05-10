@@ -14,10 +14,6 @@ pub const VM = struct {
         _ = self;
     }
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
-        if (chunk.count == 0) {
-            return .ok;
-        }
-        // Load the chunk into the VM
         self.chunk = chunk;
         self.ip = &chunk.code[0];
         return self.run();
@@ -40,7 +36,7 @@ pub const VM = struct {
     // UNSAFE: no bounds check
     fn run(self: *VM) InterpretResult {
         var debug_offset: usize = 0;
-        while (true) {
+        while (debug_offset < self.chunk.count) {
             // If we have a debug info, print the current instruction before executing
             if (self.debugInfo) |d| {
                 debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM" });
@@ -67,6 +63,7 @@ pub const VM = struct {
                 // },
             }
         }
+        return .ok;
     }
 };
 
