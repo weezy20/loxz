@@ -132,7 +132,12 @@ pub const Chunk = struct {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         defer _ = gpa.deinit();
         const allocator = gpa.allocator();
-        while (offset < self.count) : (offset = debug.disassembleInstruction(self, offset, debugInfo, allocator)) {}
+        while (offset < self.count) : (offset = debug.disassembleInstruction(
+            self,
+            offset,
+            allocator,
+            .{ .debugInfo = debugInfo, .prefix = name orelse "CHUNK" },
+        )) {}
     }
 };
 

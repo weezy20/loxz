@@ -1,9 +1,12 @@
 /// Disassemble a single instruction and return next offset
-pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, debugInfo: ?*DebugInfo, allocator: std.mem.Allocator) usize {
-    dbg("0x{0X:0>4}\t", .{chunk.code[byte_offset]});
+pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator: std.mem.Allocator, opts: struct {
+    debugInfo: ?*DebugInfo,
+    prefix: []const u8 = "DEBUG INFO",
+}) usize {
+    dbg("[{0s}]: 0x{1X:0>4}\t", .{ opts.prefix, chunk.code[byte_offset] });
     const instruction = chunk.code[byte_offset];
 
-    const src_info = if (debugInfo) |d| blk: {
+    const src_info = if (opts.debugInfo) |d| blk: {
         const offset = switch (@as(OpCode, @enumFromInt(instruction))) {
             // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
             // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`

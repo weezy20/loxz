@@ -42,12 +42,12 @@ pub const VM = struct {
         while (true) {
             // If we have a debug info, print the current instruction before executing
             if (self.debugInfo) |d| {
-                debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, d, self.allocator);
+                debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM" });
             }
             const instruction = @as(OpCode, @enumFromInt(self.readByte()));
             switch (instruction) {
                 OpCode.RETURN => {
-                    // return .ok;
+                    return .ok;
                 },
                 OpCode.CONSTANT, OpCode.CONSTANT_LONG => {
                     const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);

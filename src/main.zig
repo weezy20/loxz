@@ -28,8 +28,7 @@ pub fn main() !void {
     // }
     try chunk.writeConstant(lib.Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // write without debug info
-    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // write without debug info
-    // try chunk.disassemble("test chunk", &debugInfo);
+    try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {
         .ok => {
