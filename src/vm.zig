@@ -1,7 +1,11 @@
 pub const VM = struct {
+    /// Chunk to execute
     chunk: *Chunk,
+    /// Bytecode instruction pointer
     ip: *u8,
+    /// Optional debug info to print during execution
     debugInfo: ?*DebugInfo,
+    /// Allocator for the VM
     allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator, opts: struct {
