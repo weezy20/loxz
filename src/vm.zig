@@ -1,3 +1,5 @@
+const STACK_MAX = 256;
+
 pub const VM = struct {
     /// Chunk to execute
     chunk: *Chunk,
@@ -7,6 +9,10 @@ pub const VM = struct {
     debugInfo: ?*DebugInfo,
     /// Allocator for the VM
     allocator: std.mem.Allocator,
+    /// Stack
+    stack: [STACK_MAX]Value,
+    /// Stack pointer
+    stackTop: *Value,
 
     pub fn init(allocator: std.mem.Allocator, opts: struct {
         debugInfo: ?*DebugInfo,
