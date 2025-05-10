@@ -37,6 +37,7 @@ pub const VM = struct {
             return long_idx;
         }
     }
+    // UNSAFE: no bounds check
     fn run(self: *VM) InterpretResult {
         var debug_offset: usize = 0;
         while (true) {

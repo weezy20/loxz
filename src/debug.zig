@@ -5,7 +5,6 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
 }) usize {
     dbg("[{0s}]: 0x{1X:0>4}\t", .{ opts.prefix, chunk.code[byte_offset] });
     const instruction = chunk.code[byte_offset];
-
     const src_info = if (opts.debugInfo) |d| blk: {
         const offset = switch (@as(OpCode, @enumFromInt(instruction))) {
             // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
