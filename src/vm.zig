@@ -1,14 +1,17 @@
 pub const VM = struct {
     chunk: *Chunk,
     ip: *u8,
+    debugInfo: ?*DebugInfo,
+    allocator: std.mem.Allocator,
 
-    pub fn init(allocator: std.mem.Allocator) VM {
-        _ = allocator;
-        return VM{ .chunk = undefined, .ip = undefined };
+    pub fn init(allocator: std.mem.Allocator, opts: struct {
+        debugInfo: ?*DebugInfo,
+    }) VM {
+        return VM{ .allocator = allocator, .chunk = undefined, .ip = undefined, .debugInfo = opts.debugInfo };
     }
+    /// No-op for now
     pub fn deinit(self: *VM) void {
         _ = self;
-        // self.chunks.deinit();
     }
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
         if (chunk.count == 0) {
@@ -21,12 +24,12 @@ pub const VM = struct {
     }
     /// Read a byte from the current instruction pointer and increment it.
     /// SAFETY: Depends on caller to make sure outside of bounds access is not possible
-    pub fn readByte(self: *VM) u8 {
+    fn readByte(self: *VM) u8 {
         const byte = self.ip.*;
         self.ip = @ptrFromInt(@intFromPtr(self.ip) + 1);
         return byte;
     }
-    pub fn readConstant(self: *VM, long: bool) usize {
+    fn readConstant(self: *VM, long: bool) usize {
         if (!long) {
             return self.readByte();
         } else {
@@ -34,12 +37,17 @@ pub const VM = struct {
             return long_idx;
         }
     }
-    pub fn run(self: *VM) InterpretResult {
+    fn run(self: *VM) InterpretResult {
+        var debug_offset: usize = 0;
         while (true) {
+            // If we have a debug info, print the current instruction before executing
+            if (self.debugInfo) |d| {
+                debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, d, self.allocator);
+            }
             const instruction = @as(OpCode, @enumFromInt(self.readByte()));
             switch (instruction) {
                 OpCode.RETURN => {
-                    return .ok;
+                    // return .ok;
                 },
                 OpCode.CONSTANT, OpCode.CONSTANT_LONG => {
                     const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
@@ -48,7 +56,7 @@ pub const VM = struct {
                     };
                     std.debug.print("Constant: {d}\n", .{constant_value});
                     // Handle the constant value here
-                    return .ok;
+                    // return .ok;
                 },
                 // else => {
                 //     // Handle other opcodes here
@@ -72,3 +80,4 @@ const lib = @import("root.zig");
 const Chunk = lib.Chunk;
 const OpCode = lib.OpCode;
 const Value = lib.Value;
+const DebugInfo = lib.DebugInfo;
