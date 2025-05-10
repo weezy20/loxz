@@ -26,19 +26,36 @@ pub const VM = struct {
         self.ip = @ptrFromInt(@intFromPtr(self.ip) + 1);
         return byte;
     }
+    pub fn readConstant(self: *VM, long: bool) usize {
+        if (!long) {
+            return self.readByte();
+        } else {
+            const long_idx: usize = @as(usize, self.readByte()) << 16 | @as(usize, self.readByte()) << 8 | @as(usize, self.readByte());
+            return long_idx;
+        }
+    }
     pub fn run(self: *VM) InterpretResult {
         while (true) {
-            const instruction = self.readByte();
-            switch (@as(OpCode, @enumFromInt(instruction))) {
+            const instruction = @as(OpCode, @enumFromInt(self.readByte()));
+            switch (instruction) {
                 OpCode.RETURN => {
                     return .ok;
                 },
-                else => {
-                    // Handle other opcodes here
-                    // For now, just print the instruction
-                    std.debug.print("Unknown instruction: {d}\n", .{instruction});
-                    return .{ .runtime_error = "Unknown instruction" };
+                OpCode.CONSTANT, OpCode.CONSTANT_LONG => {
+                    const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
+                    const constant_value = self.chunk.constants.get(constant_index) catch |err| {
+                        return .{ .runtime_error = @errorName(err) };
+                    };
+                    std.debug.print("Constant: {d}\n", .{constant_value});
+                    // Handle the constant value here
+                    return .ok;
                 },
+                // else => {
+                //     // Handle other opcodes here
+                //     // For now, just print the instruction
+                //     std.debug.print("Unknown instruction: {d}\n", .{instruction});
+                //     return .{ .runtime_error = "Unknown instruction" };
+                // },
             }
         }
     }

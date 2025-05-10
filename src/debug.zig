@@ -41,7 +41,7 @@ fn simpleInstruction(name: []const u8, offset: usize, src_info: []const u8) usiz
 }
 
 fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
-    const constant_index = chunk.code[offset + 1]; // Skip 1 byte for OP_CONSTANT
+    const constant_index = chunk.getConstantIdx(offset).?; // Skips 1 byte for OP_CONSTANT
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
@@ -53,11 +53,7 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src
 }
 
 fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
-    const constant_index: u24 =
-        (@as(u24, chunk.code[offset + 1]) << 16) |
-        (@as(u24, chunk.code[offset + 2]) << 8) |
-        @as(u24, chunk.code[offset + 3]);
-
+    const constant_index = chunk.getConstantIdx(offset).?; // Skips 3 byte for OP_CONSTANT_LONG
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
     };

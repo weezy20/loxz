@@ -82,6 +82,23 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
+    /// Given a `idx` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
+    pub fn getConstantIdx(self: *const Chunk, idx: usize) ?usize {
+        const instruction: OpCode = @enumFromInt(self.code[idx]);
+        switch (instruction) {
+            .CONSTANT => {
+                return @as(usize, self.code[idx + 1]);
+            },
+            .CONSTANT_LONG => {
+                return @as(usize, self.code[idx + 1]) << 16 |
+                    @as(usize, self.code[idx + 2]) << 8 |
+                    @as(usize, self.code[idx + 3]);
+            },
+            else => {
+                return null;
+            },
+        }
+    }
 
     /// Grow memory behind the chunk and bump up it's capacity accordingly
     pub fn grow(
