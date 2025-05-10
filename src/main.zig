@@ -17,7 +17,7 @@ pub fn main() !void {
     } else {
         dbg("Dev Mode\n", .{});
     }
-    var vm = try lib.VM.init(allocator, null);
+    var vm = lib.VM.init(allocator);
     defer vm.deinit();
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit(); // deinit of chunk is now handled by VM
@@ -29,12 +29,15 @@ pub fn main() !void {
     // for (0..300) |i| {
     //     try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
     // }
-    // try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // Write a return instruction
-    try chunk.write(@intFromEnum(op.RETURN)); // write without debug info
+    try chunk.writeConstant(lib.Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // write without debug info
     try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {
-        .ok => {},
+        .ok => {
+            std.debug.print("Program executed successfully.\n", .{});
+            std.process.exit(0);
+        },
         .compile_error => |err_msg| {
             if (err_msg) |msg| {
                 std.debug.print("Compiler Error: {s}\n", .{msg});
