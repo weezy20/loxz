@@ -17,14 +17,17 @@ pub const VM = struct {
     pub fn init(allocator: std.mem.Allocator, opts: struct {
         debugInfo: ?*DebugInfo,
     }) VM {
-        var stackInit = [_]Value{.Nil} ** STACK_MAX;
+        const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
+            std.debug.print("Error allocating stack: {s}\n", .{@errorName(err)});
+            std.process.exit(101);
+        };
         return VM{
             .chunk = undefined,
             .ip = undefined,
             .debugInfo = opts.debugInfo,
             .allocator = allocator,
-            .stack = &stackInit,
-            .stackTop = &stackInit,
+            .stack = stackInit,
+            .stackTop = stackInit,
         };
     }
     inline fn stackSize(self: *VM) usize {
@@ -57,7 +60,7 @@ pub const VM = struct {
         return self.stackTop.*;
     }
     pub fn deinit(self: *VM) void {
-        _ = self;
+        _ = self.allocator.destroy(self.stack);
     }
 
     pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
@@ -107,21 +110,6 @@ pub const VM = struct {
         return .ok;
     }
 };
-
-// pub const ValueStack = struct {
-//     stack: [STACK_MAX]Value,
-//     top: [*]Value,
-
-//     pub inline fn push(self: *ValueStack, value: Value) void {
-//         self.top[0] = value;
-//         self.top += 1;
-//     }
-
-//     pub inline fn pop(self: *ValueStack) Value {
-//         self.top -= 1;
-//         return (self.top)[0];
-//     }
-// };
 
 pub const InterpretResult = union(enum) {
     ok,
