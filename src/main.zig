@@ -29,8 +29,9 @@ pub fn main() !void {
     // }
     try chunk.writeConstant(Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
     try chunk.writeConstant(Value{ .String = "Hello World2" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeConstant(Value{ .String = "Hello World3" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // write without debug info
+    try chunk.writeConstant(Value{ .Number = 1.2 }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.NEGATE), &debugInfo, 2, .{ 0, 6 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 3, .{ 0, 6 });
     // try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
     switch (result) {

@@ -31,8 +31,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
 
     switch (@as(OpCode, @enumFromInt(instruction))) {
         .RETURN => return simpleInstruction("OP_RETURN", byte_offset, src_info),
+        .NEGATE => return simpleInstruction("OP_NEGATE", byte_offset, src_info),
         .CONSTANT => return constantInstruction("OP_CONSTANT", chunk, byte_offset, src_info),
-        // TODO: Separate this out to constantLongInstruction
         .CONSTANT_LONG => return constantLongInstruction("OP_CONSTANT_LONG", chunk, byte_offset, src_info),
     }
 }

@@ -95,12 +95,12 @@ pub const VM = struct {
             }
             const instruction = @as(OpCode, @enumFromInt(self.readByte()));
             switch (instruction) {
-                OpCode.RETURN => {
+                .RETURN => {
                     const val = self.pop();
                     std.debug.print("Return Value: {s}\n", .{val});
                     return .ok;
                 },
-                OpCode.CONSTANT, OpCode.CONSTANT_LONG => {
+                .CONSTANT, .CONSTANT_LONG => {
                     const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
                     const constant_value = self.chunk.constants.get(constant_index) catch |err| {
                         return .{ .runtime_error = @errorName(err) };
@@ -108,6 +108,16 @@ pub const VM = struct {
                     self.push(constant_value) catch |err| {
                         return .{ .runtime_error = @errorName(err) };
                     };
+                },
+                .NEGATE => {
+                    const value = self.pop();
+                    if (value.isNumber()) |num| {
+                        self.push(Value{ .Number = -num }) catch |err| {
+                            return .{ .runtime_error = @errorName(err) };
+                        };
+                    } else {
+                        return .{ .runtime_error = "Operand must be a number." };
+                    }
                 },
             }
         }
