@@ -10,48 +10,52 @@ pub const VM = struct {
     /// Allocator for the VM
     allocator: std.mem.Allocator,
     /// Stack
-    stack: [STACK_MAX]Value,
+    stack: *[STACK_MAX]Value,
     /// Stack pointer - points just past the last used element
-    stackTop: usize,
+    stackTop: [*]Value,
 
     pub fn init(allocator: std.mem.Allocator, opts: struct {
         debugInfo: ?*DebugInfo,
     }) VM {
+        var stackInit = [_]Value{.Nil} ** STACK_MAX;
         return VM{
             .chunk = undefined,
             .ip = undefined,
             .debugInfo = opts.debugInfo,
             .allocator = allocator,
-            .stack = undefined,
-            .stackTop = 0,
+            .stack = &stackInit,
+            .stackTop = &stackInit,
         };
+    }
+    inline fn stackSize(self: *VM) usize {
+        return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
     }
 
     pub fn resetStack(self: *VM) void {
-        self.stackTop = 0;
+        self.stackTop = self.stack;
+    }
+    fn printStack(self: *VM) void {
+        std.debug.print("Stack [ ", .{});
+        var current: [*]Value = self.stack;
+        while (@intFromPtr(current) < @intFromPtr(self.stackTop)) : (current += 1) {
+            const value = current[0];
+            std.debug.print("<{}> ", .{value});
+        }
+        std.debug.print(" ]\n", .{});
     }
 
     fn push(self: *VM, value: Value) !void {
-        if (self.stackTop >= STACK_MAX) {
+        if (self.stackSize() >= STACK_MAX) {
             return error.StackOverflow;
         }
-        self.stack[self.stackTop] = value;
+        self.stackTop[0] = value;
         self.stackTop += 1;
     }
 
     fn pop(self: *VM) Value {
         self.stackTop -= 1;
-        return self.stack[self.stackTop];
+        return self.stackTop.*;
     }
-
-    fn printStack(self: *VM) void {
-        std.debug.print("Stack ({} items): [", .{self.stackTop});
-        for (0..self.stackTop) |i| {
-            std.debug.print("{}, ", .{self.stack[i]});
-        }
-        std.debug.print("]\n", .{});
-    }
-
     pub fn deinit(self: *VM) void {
         _ = self;
     }
@@ -62,13 +66,13 @@ pub const VM = struct {
         return self.run();
     }
 
-    fn readByte(self: *VM) u8 {
+    inline fn readByte(self: *VM) u8 {
         const byte = self.ip.*;
         self.ip = @ptrFromInt(@intFromPtr(self.ip) + 1);
         return byte;
     }
 
-    fn readConstant(self: *VM, long: bool) usize {
+    inline fn readConstant(self: *VM, long: bool) usize {
         if (!long) {
             return self.readByte();
         } else {
@@ -103,6 +107,21 @@ pub const VM = struct {
         return .ok;
     }
 };
+
+// pub const ValueStack = struct {
+//     stack: [STACK_MAX]Value,
+//     top: [*]Value,
+
+//     pub inline fn push(self: *ValueStack, value: Value) void {
+//         self.top[0] = value;
+//         self.top += 1;
+//     }
+
+//     pub inline fn pop(self: *ValueStack) Value {
+//         self.top -= 1;
+//         return (self.top)[0];
+//     }
+// };
 
 pub const InterpretResult = union(enum) {
     ok,
