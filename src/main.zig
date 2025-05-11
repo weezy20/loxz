@@ -19,16 +19,17 @@ pub fn main() !void {
     }
     var debugInfo = try lib.DebugInfo.init(allocator, .{});
     defer debugInfo.deinit();
-    var vm = lib.VM.init(allocator, .{ .debugInfo = &debugInfo });
+    // var vm = lib.VM.init(allocator, .{ .debugInfo = &debugInfo });
+    var vm = lib.VM.init(allocator, .{});
     defer vm.deinit();
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit(); // deinit of chunk is now handled by VM
     // for (0..300) |i| {
     //     try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
     // }
-    try chunk.writeConstant(lib.Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeConstant(lib.Value{ .String = "Hello World2" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeConstant(lib.Value{ .String = "Hello World3" }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeConstant(Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeConstant(Value{ .String = "Hello World2" }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeConstant(Value{ .String = "Hello World3" }, &debugInfo, 1, .{ 0, 11 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 2, .{ 0, 6 }); // write without debug info
     // try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk);
@@ -96,6 +97,7 @@ fn validate_file(file: []const u8) !bool {
 }
 
 const lib = @import("loxz");
+const Value = lib.Value;
 const std = @import("std");
 const dbg = std.debug.print;
 const op = lib.OpCode;

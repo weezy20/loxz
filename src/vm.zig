@@ -15,7 +15,7 @@ pub const VM = struct {
     stackTop: [*]Value,
 
     pub fn init(allocator: std.mem.Allocator, opts: struct {
-        debugInfo: ?*DebugInfo,
+        debugInfo: ?*DebugInfo = null,
     }) VM {
         const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
             std.debug.print("Error allocating stack: {s}\n", .{@errorName(err)});
@@ -57,7 +57,7 @@ pub const VM = struct {
 
     fn pop(self: *VM) Value {
         self.stackTop -= 1;
-        return self.stackTop.*;
+        return self.stackTop[0];
     }
     pub fn deinit(self: *VM) void {
         _ = self.allocator.destroy(self.stack);
@@ -95,7 +95,11 @@ pub const VM = struct {
             }
             const instruction = @as(OpCode, @enumFromInt(self.readByte()));
             switch (instruction) {
-                OpCode.RETURN => return .ok,
+                OpCode.RETURN => {
+                    const val = self.pop();
+                    std.debug.print("Return Value: {s}\n", .{val});
+                    return .ok;
+                },
                 OpCode.CONSTANT, OpCode.CONSTANT_LONG => {
                     const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
                     const constant_value = self.chunk.constants.get(constant_index) catch |err| {
