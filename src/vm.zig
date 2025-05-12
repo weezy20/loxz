@@ -47,9 +47,9 @@ fn printStack(self: *VM) void {
     std.debug.print(" ]\n", .{});
 }
 
-fn push(self: *VM, value: Value) !void {
+fn push(self: *VM, value: Value) RuntimeError!void {
     if (self.stackSize() >= STACK_MAX) {
-        return error.StackOverflow;
+        return RuntimeError.StackOverflow;
     }
     self.stackTop[0] = value;
     self.stackTop += 1;
@@ -66,7 +66,12 @@ pub fn deinitVM(self: *VM) void {
 pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
     self.chunk = chunk;
     self.ip = &chunk.code[0];
-    return self.run();
+
+    if (self.run()) {
+        return .ok;
+    } else |err| {
+        return .{ .runtime_error = err };
+    }
 }
 
 inline fn readByte(self: *VM) u8 {
@@ -85,7 +90,7 @@ inline fn readConstant(self: *VM, long: bool) usize {
     }
 }
 
-fn run(self: *VM) InterpretResult {
+fn run(self: *VM) RuntimeError!void {
     var debug_offset: usize = 0;
     while (debug_offset < self.chunk.count) {
         if (self.debugInfo) |d| blk: {
@@ -98,79 +103,66 @@ fn run(self: *VM) InterpretResult {
             .RETURN => {
                 const val = self.pop();
                 std.debug.print("Return Value: {s}\n", .{val});
-                return .ok;
+                return;
             },
             .CONSTANT, .CONSTANT_LONG => {
                 const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
                 const constant_value = self.chunk.constants.get(constant_index) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
+                    return err;
                 };
-                self.push(constant_value) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
-                };
+                try self.push(constant_value);
             },
             .NEGATE => {
                 const value = self.pop();
                 if (value.isNumber()) |num| {
-                    self.push(Value{ .Number = -num }) catch |err| {
-                        return .{ .runtime_error = @errorName(err) };
-                    };
+                    try self.push(Value{ .Number = -num });
                 } else {
-                    return .{ .runtime_error = "Operand must be a number." };
+                    return RuntimeError.NaN;
                 }
             },
             .ADD => {
-                const rhs = self.popNumber();
-                const lhs = self.popNumber();
-                self.pushNumber(add(lhs, rhs)) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
-                };
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                try self.pushNumber(add(lhs, rhs));
             },
             .SUBTRACT => {
-                const rhs = self.popNumber();
-                const lhs = self.popNumber();
-                self.pushNumber(sub(lhs, rhs)) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
-                };
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                try self.pushNumber(sub(lhs, rhs));
             },
             .MULTIPLY => {
-                const rhs = self.popNumber();
-                const lhs = self.popNumber();
-                self.pushNumber(mul(lhs, rhs)) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
-                };
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                try self.pushNumber(mul(lhs, rhs));
             },
             .DIVIDE => {
-                const rhs = self.popNumber();
-                const lhs = self.popNumber();
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
                 if (rhs == 0.0) {
-                    return .{ .runtime_error = "Division by zero." };
+                    return RuntimeError.DivisionByZero;
                 }
-                self.pushNumber(div(lhs, rhs)) catch |err| {
-                    return .{ .runtime_error = @errorName(err) };
-                };
+                try self.pushNumber(div(lhs, rhs));
             },
         }
     }
-    return .ok;
 }
-inline fn popNumber(self: *VM) f64 {
+
+inline fn popNumber(self: *VM) RuntimeError!f64 {
     const value = self.pop();
     if (value.isNumber()) |num| {
         return num;
     } else {
-        std.debug.print("Error: Expected number, got {s}\n", .{value});
-        return 0.0;
+        return RuntimeError.NaN;
     }
 }
-inline fn pushNumber(self: *VM, value: f64) !void {
+inline fn pushNumber(self: *VM, value: f64) RuntimeError!void {
     try self.push(Value{ .Number = value });
 }
 
 pub const InterpretResult = union(enum) {
     ok,
-    compile_error: ?[]const u8,
-    runtime_error: ?[]const u8,
+    compile_error: CompileError,
+    runtime_error: RuntimeError,
 };
 
 fn div(x: f64, y: f64) f64 {
@@ -185,6 +177,19 @@ fn add(x: f64, y: f64) f64 {
 fn sub(x: f64, y: f64) f64 {
     return x - y;
 }
+
+const CompileError = error{
+    Oops,
+};
+
+const RuntimeError = error{
+    StackOverflow,
+    NaN,
+    DivisionByZero,
+    ValueIndexOutOfBounds,
+    OutOfMemory,
+};
+
 const std = @import("std");
 const lib = @import("root.zig");
 const Chunk = lib.Chunk;

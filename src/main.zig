@@ -43,20 +43,12 @@ pub fn main() !void {
             std.debug.print("Program executed successfully.\n", .{});
             std.process.exit(0);
         },
-        .compile_error => |err_msg| {
-            if (err_msg) |msg| {
-                std.debug.print("Compiler Error: {s}\n", .{msg});
-            } else {
-                std.debug.print("Compiler Error: (no message)\n", .{});
-            }
+        .compile_error => |err| {
+            std.debug.print("Compiler Error: {s}\n", .{@errorName(err)});
             std.process.exit(5);
         },
-        .runtime_error => |err_msg| {
-            if (err_msg) |msg| {
-                std.debug.print("Runtime Error: {s}\n", .{msg});
-            } else {
-                std.debug.print("Runtime Error: (no message)\n", .{});
-            }
+        .runtime_error => |err| {
+            std.debug.print("Runtime Error: {s}\n", .{@errorName(err)});
             std.process.exit(3);
         },
     }
