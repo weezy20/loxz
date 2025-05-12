@@ -5,9 +5,9 @@ const std = @import("std");
 
 pub fn run(allocator: std.mem.Allocator) !struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 } {
     const params = comptime clap.parseParamsComptime(
-        \\-h, --help             Display this help message and exit
-        \\-d, --debug            Enable debug mode
-        \\-t, --tracing    Enable stack traces
+        \\-h, --help            Display this help message and exit
+        \\-d, --debug           Enable debug mode
+        \\-t, --tracing         Enable stack traces
         \\<str>                 Optional path to .lox file
     );
 
