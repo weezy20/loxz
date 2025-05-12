@@ -20,10 +20,10 @@ pub fn main() !void {
     var debugInfo = try lib.DebugInfo.init(allocator, .{});
     defer debugInfo.deinit();
     // uncomment for printing debug info and stack
-    var vm = lib.VM.init(allocator, .{ .debugInfo = &debugInfo });
+    var vm = lib.initVM(allocator, .{ .debugInfo = &debugInfo });
     // uncomment for silencing debug info
     // var vm = lib.VM.init(allocator, .{});
-    defer vm.deinit();
+    defer vm.deinitVM();
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit(); // deinit of chunk is now handled by VM
     // for (0..300) |i| {
