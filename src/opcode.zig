@@ -3,4 +3,9 @@ pub const OpCode = enum(u8) {
     CONSTANT = 0x01,
     CONSTANT_LONG = 0x02,
     NEGATE,
+    // Arithmetic OPs
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
 };

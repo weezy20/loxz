@@ -119,9 +119,52 @@ pub const VM = struct {
                         return .{ .runtime_error = "Operand must be a number." };
                     }
                 },
+                .ADD => {
+                    const rhs = self.popNumber();
+                    const lhs = self.popNumber();
+                    self.pushNumber(add(lhs, rhs)) catch |err| {
+                        return .{ .runtime_error = @errorName(err) };
+                    };
+                },
+                .SUBTRACT => {
+                    const rhs = self.popNumber();
+                    const lhs = self.popNumber();
+                    self.pushNumber(sub(lhs, rhs)) catch |err| {
+                        return .{ .runtime_error = @errorName(err) };
+                    };
+                },
+                .MULTIPLY => {
+                    const rhs = self.popNumber();
+                    const lhs = self.popNumber();
+                    self.pushNumber(mul(lhs, rhs)) catch |err| {
+                        return .{ .runtime_error = @errorName(err) };
+                    };
+                },
+                .DIVIDE => {
+                    const rhs = self.popNumber();
+                    const lhs = self.popNumber();
+                    if (rhs == 0.0) {
+                        return .{ .runtime_error = "Division by zero." };
+                    }
+                    self.pushNumber(div(lhs, rhs)) catch |err| {
+                        return .{ .runtime_error = @errorName(err) };
+                    };
+                },
             }
         }
         return .ok;
+    }
+    inline fn popNumber(self: *VM) f64 {
+        const value = self.pop();
+        if (value.isNumber()) |num| {
+            return num;
+        } else {
+            std.debug.print("Error: Expected number, got {s}\n", .{value});
+            return 0.0;
+        }
+    }
+    inline fn pushNumber(self: *VM, value: f64) !void {
+        try self.push(Value{ .Number = value });
     }
 };
 
@@ -131,6 +174,18 @@ pub const InterpretResult = union(enum) {
     runtime_error: ?[]const u8,
 };
 
+fn div(x: f64, y: f64) f64 {
+    return x / y;
+}
+fn mul(x: f64, y: f64) f64 {
+    return x * y;
+}
+fn add(x: f64, y: f64) f64 {
+    return x + y;
+}
+fn sub(x: f64, y: f64) f64 {
+    return x - y;
+}
 const std = @import("std");
 const lib = @import("root.zig");
 const Chunk = lib.Chunk;
