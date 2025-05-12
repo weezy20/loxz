@@ -34,10 +34,10 @@ pub fn main() !void {
     try chunk.writeConstant(Value{ .Number = 10 }, &debugInfo, 1, .{ 0, 11 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.NEGATE), &debugInfo, 2, .{ 0, 6 });
     try chunk.writeConstant(Value{ .Number = 5 }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeWithDebugInfo(@intFromEnum(op.DIVIDE), &debugInfo, 2, .{ 0, 6 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.ADD), &debugInfo, 2, .{ 0, 6 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 3, .{ 0, 6 });
     // try chunk.disassemble("test chunk", &debugInfo);
-    const result = vm.interpret(&chunk);
+    const result = vm.interpret(&chunk, .{ .stack_tracing = true });
     switch (result) {
         .ok => {
             std.debug.print("Program executed successfully.\n", .{});

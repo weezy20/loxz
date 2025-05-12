@@ -63,11 +63,11 @@ pub fn deinitVM(self: *VM) void {
     _ = self.allocator.destroy(self.stack);
 }
 
-pub fn interpret(self: *VM, chunk: *Chunk) InterpretResult {
+pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false }) InterpretResult {
     self.chunk = chunk;
     self.ip = &chunk.code[0];
-
-    if (self.run()) {
+    // Enable stack-tracing here
+    if (self.run(opts.stack_tracing)) {
         return .ok;
     } else |err| {
         return .{ .runtime_error = err };
@@ -90,12 +90,12 @@ inline fn readConstant(self: *VM, long: bool) usize {
     }
 }
 
-fn run(self: *VM) RuntimeError!void {
+fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
     var debug_offset: usize = 0;
     while (debug_offset < self.chunk.count) {
         if (self.debugInfo) |d| blk: {
             if (debug_offset >= self.chunk.count) break :blk;
-            self.printStack();
+            if (stack_tracing) self.printStack();
             debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM" });
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
