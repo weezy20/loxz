@@ -2,7 +2,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
-
+    const config = cli.run(allocator);
     if (try file_or_repl(allocator)) |filename| {
         defer allocator.free(filename);
         if (validate_file(filename) catch |err| {
@@ -37,7 +37,7 @@ pub fn main() !void {
     try chunk.writeWithDebugInfo(@intFromEnum(op.ADD), &debugInfo, 2, .{ 0, 6 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 3, .{ 0, 6 });
     // try chunk.disassemble("test chunk", &debugInfo);
-    const result = vm.interpret(&chunk, .{ .stack_tracing = true });
+    const result = vm.interpret(&chunk, .{ .stack_tracing = config.stack_tracing });
     switch (result) {
         .ok => {
             std.debug.print("Program executed successfully.\n", .{});
@@ -96,5 +96,6 @@ fn validate_file(file: []const u8) !bool {
 const lib = @import("loxz");
 const Value = lib.Value;
 const std = @import("std");
+const cli = @import("cli");
 const dbg = std.debug.print;
 const op = lib.OpCode;
