@@ -69,11 +69,42 @@ fn validate_file(file: []const u8) !void {
     file_exists.close();
 }
 
-pub fn repl() !void {
+pub fn repl(allocator: std.mem.Allocator) !void {
     const stdout = std.io.getStdOut().writer();
-    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox\n");
-    const buf: [1024]u8 = [_]u8{0} ** 1024;
+    const stdin = std.io.getStdIn().reader();
+    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox (use \\ to continue lines)\n");
+
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+    var line_buf: [2048]u8 = [_]u8{0} ** 2048;
+    var multi_line = false;
+
     while (true) {
-        _ = buf;
+        if (!multi_line) {
+            try stdout.writeAll(">> ");
+        } else {
+            try stdout.writeAll("...  "); // Continuation prompt
+        }
+
+        const bytes_read = try stdin.readUntilDelimiter(&line_buf, '\n');
+
+        try buffer.appendSlice(bytes_read);
+
+        // Check if the line ends with '\' (escaped newline)
+        if (buffer.items.len > 0 and buffer.items[buffer.items.len - 1] == '\\') {
+            // Remove the '\' and keep reading
+            _ = buffer.pop(); // Remove trailing backslash
+            multi_line = true;
+            continue; // Read next line
+        } else {
+            multi_line = false;
+        }
+
+        // If we get here, the input is complete
+        try stdout.writeAll("You entered: ");
+        try stdout.writeAll(buffer.items);
+        try stdout.writeAll("\n");
+
+        buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
 }
