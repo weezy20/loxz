@@ -120,7 +120,11 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
 
 pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     const file = config.file_path.?;
-    const source = try std.fs.cwd().readFileAlloc(allocator, file, std.math.maxInt(usize));
+    const file_info = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
+    const file_stat = try file_info.stat();
+    const file_size = file_stat.size;
+
+    const source = try std.fs.cwd().readFileAlloc(allocator, file, file_size);
     defer allocator.free(source);
 
     var lines = std.mem.splitSequence(u8, source, "\n");
