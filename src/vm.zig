@@ -113,9 +113,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 try self.push(constant_value);
             },
             .NEGATE => {
-                const value = self.pop();
-                if (value.isNumber()) |num| {
-                    try self.push(Value{ .Number = -num });
+                const value: [*]Value = self.stackTop - 1; // Autoscales ptr arithmetic based on @sizeOf(T) for [*]T
+                if (value[0].isNumber()) |num| {
+                    value[0] = Value{ .Number = -num };
                 } else {
                     return RuntimeError.NaN;
                 }
