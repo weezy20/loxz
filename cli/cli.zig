@@ -2,6 +2,7 @@
 
 const clap = @import("clap");
 const std = @import("std");
+const lib = @import("loxz");
 
 pub fn run(allocator: std.mem.Allocator) !struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 } {
     const params = comptime clap.parseParamsComptime(
@@ -66,4 +67,13 @@ fn validate_file(file: []const u8) !void {
     // Check if the file exists in the filesystem
     const file_exists = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
     file_exists.close();
+}
+
+pub fn repl() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox\n");
+    const buf: [1024]u8 = [_]u8{0} ** 1024;
+    while (true) {
+        _ = buf;
+    }
 }

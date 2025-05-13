@@ -9,7 +9,7 @@ pub fn main() !void {
     if (config.file_path) |filename| {
         dbg("Running loxz on File: {s}\n", .{filename});
     } else {
-        dbg("Dev Mode\n", .{});
+        return cli.repl();
     }
     var debugInfo = try lib.DebugInfo.init(allocator, .{});
     defer debugInfo.deinit();
