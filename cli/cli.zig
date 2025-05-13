@@ -119,12 +119,15 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
 }
 
 pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
-    const file = config.file_path.?;
-    const file_info = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
-    const file_stat = try file_info.stat();
-    const file_size = file_stat.size;
+    const file_path = config.file_path.?;
+    const file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
+    const file_size = if (file.stat()) |s| s.size else |_| blk: {
+        std.debug.print("Warning: Failed to get file stats for '{s}'. Using default size.\n", .{file_path});
+        break :blk 1_000_000;
+    };
+    file.close();
 
-    const source = try std.fs.cwd().readFileAlloc(allocator, file, file_size);
+    const source = try std.fs.cwd().readFileAlloc(allocator, file_path, file_size);
     defer allocator.free(source);
 
     var lines = std.mem.splitSequence(u8, source, "\n");
