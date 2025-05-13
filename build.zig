@@ -39,10 +39,19 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const clap = b.dependency("clap", .{});
+    const cli = b.createModule(.{
+        .root_source_file = b.path("src/cli.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    cli.addImport("clap", clap.module("clap"));
+
     // Modules can depend on one another using the `std.Build.Module.addImport` function.
     // This is what allows Zig source code to use `@import("foo")` where 'foo' is not a
     // file path. In this case, we set up `exe_mod` to import `lib_mod`.
     exe_mod.addImport("loxz", lib_mod);
+    exe_mod.addImport("cli", cli);
 
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible

@@ -1,13 +1,15 @@
 /// Disassemble a single instruction and return next offset
-pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, debugInfo: ?*DebugInfo, allocator: std.mem.Allocator) usize {
-    dbg("0x{0X:0>4}\t", .{chunk.code[byte_offset]});
+pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator: std.mem.Allocator, opts: struct {
+    debugInfo: ?*DebugInfo,
+    prefix: []const u8 = "DEBUG INFO",
+}) usize {
+    dbg("[{0s}]: 0x{1X:0>4}\t", .{ opts.prefix, chunk.code[byte_offset] });
     const instruction = chunk.code[byte_offset];
-
-    const src_info = if (debugInfo) |d| blk: {
-        // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
-        // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`
-        // +1 for skipping opcode
+    const src_info = if (opts.debugInfo) |d| blk: {
         const offset = switch (@as(OpCode, @enumFromInt(instruction))) {
+            // Because for constants, the location info is tied to the constant offset rather than the constant OP offset
+            // Check out the implementation of `writeConstant` and especially the Location struct where offset is set to `self.count + 1`
+            // +1 for skipping opcode
             .CONSTANT, .CONSTANT_LONG => byte_offset + 1,
             else => byte_offset,
         };
@@ -29,9 +31,13 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, debugInfo
 
     switch (@as(OpCode, @enumFromInt(instruction))) {
         .RETURN => return simpleInstruction("OP_RETURN", byte_offset, src_info),
+        .NEGATE => return simpleInstruction("OP_NEGATE", byte_offset, src_info),
         .CONSTANT => return constantInstruction("OP_CONSTANT", chunk, byte_offset, src_info),
-        // TODO: Separate this out to constantLongInstruction
         .CONSTANT_LONG => return constantLongInstruction("OP_CONSTANT_LONG", chunk, byte_offset, src_info),
+        .ADD => return simpleInstruction("OP_ADD", byte_offset, src_info),
+        .SUBTRACT => return simpleInstruction("OP_SUBTRACT", byte_offset, src_info),
+        .MULTIPLY => return simpleInstruction("OP_MULTIPLY", byte_offset, src_info),
+        .DIVIDE => return simpleInstruction("OP_DIVIDE", byte_offset, src_info),
     }
 }
 
@@ -41,7 +47,7 @@ fn simpleInstruction(name: []const u8, offset: usize, src_info: []const u8) usiz
 }
 
 fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
-    const constant_index = chunk.code[offset + 1]; // Skip 1 byte for OP_CONSTANT
+    const constant_index = chunk.getConstantIdx(offset).?; // Skips 1 byte for OP_CONSTANT
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
@@ -53,11 +59,7 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src
 }
 
 fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
-    const constant_index: u24 =
-        (@as(u24, chunk.code[offset + 1]) << 16) |
-        (@as(u24, chunk.code[offset + 2]) << 8) |
-        @as(u24, chunk.code[offset + 3]);
-
+    const constant_index = chunk.getConstantIdx(offset).?; // Skips 3 byte for OP_CONSTANT_LONG
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
     };
@@ -114,12 +116,19 @@ pub const DebugInfo = struct {
     /// Source line location indexed by bytecode offset
     col_spans: std.ArrayList(ColumnSpan),
 
+    pub const InitCapacity = struct {
+        /// Initial capacity for line runs
+        line_capacity: ?usize = null,
+        /// Initial capacity for column spans
+        col_capacity: ?usize = null,
+    };
+
     /// Initialize `DebugInfo` for a chunk. `line_capacity` and `col_capacity` are optional parameters to
     /// initialize the corresponding arrays based on expected chunk size.
     /// Defaults to 8 bytes if not provided
-    pub fn init(allocator: std.mem.Allocator, line_capacity: ?usize, col_capacity: ?usize) !DebugInfo {
-        const lc = if (line_capacity) |c| c else 8;
-        const cc = if (col_capacity) |c| c else 8;
+    pub fn init(allocator: std.mem.Allocator, options: InitCapacity) !DebugInfo {
+        const lc = options.line_capacity orelse 8;
+        const cc = options.col_capacity orelse 8;
         const line_runs = try std.ArrayList(LineRun).initCapacity(allocator, lc);
         const col_spans = try std.ArrayList(ColumnSpan).initCapacity(allocator, cc);
         return DebugInfo{

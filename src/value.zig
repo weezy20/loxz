@@ -20,6 +20,12 @@ pub const Value = union(enum) {
             .Nil => try writer.writeAll("Nil"),
         }
     }
+    pub fn isNumber(value: *const Value) ?f64 {
+        return switch (value.*) {
+            .Number => |num| num,
+            else => null,
+        };
+    }
 };
 
 /// Value Arrays

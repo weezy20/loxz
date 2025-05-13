@@ -1,7 +1,9 @@
-pub const OpCode = @import("opcode.zig").OpCode;
-pub const Chunk = @import("chunk.zig").Chunk;
-pub const Value = @import("value.zig").Value;
-pub const DebugInfo = @import("debug.zig").DebugInfo;
+pub usingnamespace @import("opcode.zig");
+pub usingnamespace @import("chunk.zig");
+pub usingnamespace @import("value.zig");
+pub usingnamespace @import("debug.zig");
+pub usingnamespace @import("vm.zig");
+
 const std = @import("std");
 
 const expect = std.testing.expect;

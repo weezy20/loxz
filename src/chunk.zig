@@ -82,6 +82,24 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
+    /// Given a `idx` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
+    /// in the ValueArray. If `idx` doesn't contain a constant opcode, return null.
+    pub fn getConstantIdx(self: *const Chunk, idx: usize) ?usize {
+        const instruction: OpCode = @enumFromInt(self.code[idx]);
+        switch (instruction) {
+            .CONSTANT => {
+                return @as(usize, self.code[idx + 1]);
+            },
+            .CONSTANT_LONG => {
+                return @as(usize, self.code[idx + 1]) << 16 |
+                    @as(usize, self.code[idx + 2]) << 8 |
+                    @as(usize, self.code[idx + 3]);
+            },
+            else => {
+                return null;
+            },
+        }
+    }
 
     /// Grow memory behind the chunk and bump up it's capacity accordingly
     pub fn grow(
@@ -115,7 +133,12 @@ pub const Chunk = struct {
         var gpa = std.heap.GeneralPurposeAllocator(.{}){};
         defer _ = gpa.deinit();
         const allocator = gpa.allocator();
-        while (offset < self.count) : (offset = debug.disassembleInstruction(self, offset, debugInfo, allocator)) {}
+        while (offset < self.count) : (offset = debug.disassembleInstruction(
+            self,
+            offset,
+            allocator,
+            .{ .debugInfo = debugInfo, .prefix = name orelse "CHUNK" },
+        )) {}
     }
 };
 
