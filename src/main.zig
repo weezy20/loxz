@@ -23,12 +23,12 @@ pub fn main() !void {
     // for (0..300) |i| {
     //     try chunk.writeConstant(lib.Value{ .Number = @floatFromInt(i) }, &debugInfo, i + 1, .{ 0, 2 });
     // }
-    try chunk.writeConstant(Value{ .String = "Hello World" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeConstant(Value{ .String = "Hello World2" }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeConstant(Value{ .Number = 10 }, &debugInfo, 1, .{ 0, 11 });
-    try chunk.writeWithDebugInfo(@intFromEnum(op.NEGATE), &debugInfo, 2, .{ 0, 6 });
-    try chunk.writeConstant(Value{ .Number = 5 }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeConstant(Value{ .Number = 1.2 }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeConstant(Value{ .Number = 3.4 }, &debugInfo, 1, .{ 0, 11 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.ADD), &debugInfo, 2, .{ 0, 6 });
+    try chunk.writeConstant(Value{ .Number = 5.6 }, &debugInfo, 1, .{ 0, 11 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.DIVIDE), &debugInfo, 3, .{ 0, 6 });
+    try chunk.writeWithDebugInfo(@intFromEnum(op.NEGATE), &debugInfo, 3, .{ 0, 6 });
     try chunk.writeWithDebugInfo(@intFromEnum(op.RETURN), &debugInfo, 3, .{ 0, 6 });
     // try chunk.disassemble("test chunk", &debugInfo);
     const result = vm.interpret(&chunk, .{ .stack_tracing = config.stack_tracing });

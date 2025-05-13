@@ -96,7 +96,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
         if (self.debugInfo) |d| blk: {
             if (debug_offset >= self.chunk.count) break :blk;
             if (stack_tracing) self.printStack();
-            debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM" });
+            debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM Executing" });
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
