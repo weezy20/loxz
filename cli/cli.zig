@@ -4,14 +4,13 @@ const clap = @import("clap");
 const std = @import("std");
 const lib = @import("loxz");
 
-pub const Config = struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8, dev: bool };
+pub const Config = struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 };
 
 pub fn run(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
         \\-h, --help                     Display this help message and exit
         \\-d, --debug                    Enable debug mode
         \\-t, --stack-tracing            Enable stack traces
-        \\--dev                          Enable development mode
         \\<str>                          Optional path to .lox file
     );
 
@@ -33,7 +32,6 @@ pub fn run(allocator: std.mem.Allocator) !Config {
 
     return .{
         // Provide false as default if the flags weren't provided
-        .dev = res.args.dev != 0,
         .debug = res.args.debug != 0,
         .stack_tracing = res.args.@"stack-tracing" != 0,
         .file_path = if (res.positionals.len > 0) blk: {
@@ -74,9 +72,6 @@ fn validate_file(file: []const u8) !void {
 }
 
 pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
-    if (config.dev) {
-        try @import("vaxis.zig").main(allocator);
-    }
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox (use \\ to continue lines)\n");
