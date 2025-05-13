@@ -1,4 +1,4 @@
-const STACK_MAX = 256;
+const STACK_MAX = 512;
 const VM = @This();
 
 /// Chunk to execute
