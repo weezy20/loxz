@@ -4,7 +4,9 @@ const clap = @import("clap");
 const std = @import("std");
 const lib = @import("loxz");
 
-pub fn run(allocator: std.mem.Allocator) !struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 } {
+pub const Config = struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 };
+
+pub fn run(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
         \\-h, --help                     Display this help message and exit
         \\-d, --debug                    Enable debug mode
@@ -69,10 +71,17 @@ fn validate_file(file: []const u8) !void {
     file_exists.close();
 }
 
-pub fn repl(allocator: std.mem.Allocator) !void {
+pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox (use \\ to continue lines)\n");
+
+    if (config.debug) {
+        try stdout.writeAll("Debug mode is enabled.\n");
+    }
+    if (config.stack_tracing) {
+        try stdout.writeAll("Stack tracing is enabled.\n");
+    }
 
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();
@@ -83,7 +92,7 @@ pub fn repl(allocator: std.mem.Allocator) !void {
         if (!multi_line) {
             try stdout.writeAll(">> ");
         } else {
-            try stdout.writeAll("...  "); // Continuation prompt
+            try stdout.writeAll("...  ");
         }
 
         const bytes_read = try stdin.readUntilDelimiter(&line_buf, '\n');
@@ -106,5 +115,24 @@ pub fn repl(allocator: std.mem.Allocator) !void {
         try stdout.writeAll("\n");
 
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
+    }
+}
+
+pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
+    const file = config.file_path.?;
+    const source = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
+    defer source.close();
+
+    var buf_reader = std.io.bufferedReader(source.reader());
+    const reader = buf_reader.reader();
+
+    while (true) {
+        const line = reader.readUntilDelimiterAlloc(allocator, '\n', 4096) catch |err| switch (err) {
+            error.EndOfStream => break, // EOF
+            else => return err,
+        };
+        defer allocator.free(line);
+
+        try std.io.getStdOut().writer().print("{s}\n", .{line});
     }
 }
