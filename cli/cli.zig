@@ -120,19 +120,16 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
 
 pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     const file = config.file_path.?;
-    const source = try std.fs.cwd().openFile(file, .{ .mode = .read_only });
-    defer source.close();
+    const source = try std.fs.cwd().readFileAlloc(allocator, file, std.math.maxInt(usize));
+    defer allocator.free(source);
 
-    var buf_reader = std.io.bufferedReader(source.reader());
-    const reader = buf_reader.reader();
+    var lines = std.mem.splitSequence(u8, source, "\n");
+    var line_num: usize = 1;
 
-    while (true) {
-        const line = reader.readUntilDelimiterAlloc(allocator, '\n', 4096) catch |err| switch (err) {
-            error.EndOfStream => break, // EOF
-            else => return err,
-        };
-        defer allocator.free(line);
-
-        try std.io.getStdOut().writer().print("{s}\n", .{line});
+    while (lines.next()) |line| {
+        // Process each line (trim whitespace if needed)
+        const trimmed_line = std.mem.trim(u8, line, " \r");
+        std.debug.print("Line {}: {s}\n", .{ line_num, trimmed_line });
+        line_num += 1;
     }
 }
