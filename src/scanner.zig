@@ -1,21 +1,37 @@
 /// Current lexeme being scanned
-current: *const u8,
+current: usize,
 /// Start of the current lexeme byte
-start: *const u8,
+start: usize,
 /// Line information
 line: u32,
+/// Source slice
+source: []const u8,
 
-pub fn init(source: []const u8) Scanner {
-    return Scanner{ .start = &source[0], .current = &source[0], .line = 0 };
+inline fn isAtEnd(sc: *const Scanner) bool {
+    return sc.current == sc.source.len - 1;
 }
 
+pub fn init(source: []const u8) Scanner {
+    return Scanner{ .source = source, .start = 0, .current = 0, .line = 0 };
+}
+
+inline fn makeToken(sc: *const Scanner, @"type": TokenType) Token {
+    return Token{ .tokenType = @"type", .line = sc.line, .lexeme = sc.source[sc.start..sc.current] };
+}
+inline fn errorToken(sc: *const Scanner, msg: []const u8) Token {
+    return Token{ .tokenType = TokenType.Error, .line = sc.line, .lexeme = msg };
+}
+
+/// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
-    _ = sc;
-    return .{ .tokenType = TokenType.Eof, .lexeme = "lmao", .line = 1 };
+    sc.start = sc.current;
+    if (sc.isAtEnd())
+        return sc.makeToken(TokenType.Eof);
+    return sc.errorToken("Unexpected character");
 }
 pub const Token = struct {
     tokenType: TokenType, // 1 byte
-    lexeme: []const u8, // 2 bytes
+    lexeme: []const u8, // 16 bytes
     line: u32, // 4 bytes
 };
 
@@ -29,7 +45,7 @@ fn isAlpha(char: u8) bool {
         char == '_');
 }
 
-pub fn debugTokens(sc: *Scanner) void {
+pub fn printTokens(sc: *Scanner) void {
     var line: u32 = 0;
     while (true) {
         const t = sc.scanToken();
@@ -37,7 +53,7 @@ pub fn debugTokens(sc: *Scanner) void {
             std.debug.print("{d: <4}", .{line});
             line = t.line;
         } else {
-            std.debug.print("   |", .{});
+            std.debug.print("   | ", .{});
         }
         std.debug.print("{any} '{s}'\n", .{ t.tokenType, t.lexeme });
         if (t.tokenType == TokenType.Eof) break;
