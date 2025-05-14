@@ -10,7 +10,6 @@ source: []const u8,
 pub fn init(source: []const u8) Scanner {
     return Scanner{ .source = source, .start = 0, .current = 0, .line = 0 };
 }
-
 inline fn makeToken(sc: *const Scanner, @"type": TokenType) Token {
     return Token{ .tokenType = @"type", .line = sc.line, .lexeme = sc.source[sc.start..sc.current] };
 }
@@ -33,8 +32,18 @@ inline fn match(sc: *Scanner, expected: u8) bool {
     sc.current += 1;
     return true;
 }
+/// Peek the current byte without incrementing `current`
+inline fn peek(sc: *const Scanner) ?u8 {
+    if (sc.isAtEnd()) return null; // Safety: prevent out of bounds access
+    return sc.source[sc.current];
+}
+/// Peek the next byte without incrementing `current`
+inline fn peekNext(sc: *const Scanner) ?u8 {
+    if (sc.current + 1 >= sc.source.len) return null; // Safety: prevent out of bounds access
+    return sc.source[sc.current + 1];
+}
 /// Skip whitespace and newline (increment scanner line on `\n`)
-inline fn skipWhitespaceAndNewLine(sc: *Scanner) void {
+inline fn skipNonTokens(sc: *Scanner) void {
     while (true) {
         if (sc.isAtEnd()) return;
         const c = sc.source[sc.current];
@@ -44,6 +53,11 @@ inline fn skipWhitespaceAndNewLine(sc: *Scanner) void {
                 sc.line += 1;
                 sc.current += 1;
             },
+            '/' => {
+                if (sc.peekNext() == '/') {
+                    while (sc.peek() != '\n' and !sc.isAtEnd()) sc.current += 1;
+                } else return;
+            },
             else => break,
         }
     }
@@ -51,7 +65,7 @@ inline fn skipWhitespaceAndNewLine(sc: *Scanner) void {
 
 /// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
-    sc.skipWhitespaceAndNewLine();
+    sc.skipNonTokens();
     sc.start = sc.current;
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
@@ -102,7 +116,7 @@ fn isAlpha(char: u8) bool {
         ('A' <= char and char <= 'Z') or
         char == '_');
 }
-
+/// Print tokens to stderr
 pub fn printTokens(sc: *Scanner) void {
     var line: u32 = undefined;
     while (true) {
