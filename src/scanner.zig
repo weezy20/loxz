@@ -33,9 +33,25 @@ inline fn match(sc: *Scanner, expected: u8) bool {
     sc.current += 1;
     return true;
 }
+/// Skip whitespace and newline (increment scanner line on `\n`)
+inline fn skipWhitespaceAndNewLine(sc: *Scanner) void {
+    while (true) {
+        if (sc.isAtEnd()) return;
+        const c = sc.source[sc.current];
+        switch (c) {
+            ' ', '\r', '\t' => sc.current += 1,
+            '\n' => {
+                sc.line += 1;
+                sc.current += 1;
+            },
+            else => break,
+        }
+    }
+}
 
 /// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
+    sc.skipWhitespaceAndNewLine();
     sc.start = sc.current;
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
@@ -68,7 +84,6 @@ pub fn scanToken(sc: *Scanner) Token {
             makeToken(sc, TokenType.GreaterEqual)
         else
             makeToken(sc, TokenType.Greater),
-        ' ' => return sc.scanToken(),
         else => return sc.errorToken("Unexpected character"),
     }
 }
