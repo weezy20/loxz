@@ -1,4 +1,4 @@
-//! Cli utilities
+//! Loxz command line interface
 
 const clap = @import("clap");
 const std = @import("std");
@@ -103,6 +103,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         if (buffer.items.len > 0 and buffer.items[buffer.items.len - 1] == '\\') {
             // Remove the '\' and keep reading
             _ = buffer.pop(); // Remove trailing backslash
+            buffer.append('\n') catch unreachable;
             multi_line = true;
             continue; // Read next line
         } else {
@@ -114,7 +115,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         try stdout.writeAll(buffer.items);
         try stdout.writeAll("\n");
 
-        const result = interpret(buffer.items) catch |err| {
+        const result = interpret(buffer.items, config) catch |err| {
             std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
             buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
             continue;
@@ -148,7 +149,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     std.debug.assert(source.len == file_size);
     defer allocator.free(source);
 
-    const result = interpret(source) catch |err| {
+    const result = interpret(source, config) catch |err| {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
@@ -164,10 +165,8 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     }
 }
 
-fn interpret(source: []const u8) !InterpretResult {
-    if (std.mem.eql(u8, source, "error")) {
-        return error.Foo;
-    }
+fn interpret(source: []const u8, config: *const Config) !InterpretResult {
+    lib.compile(source, .{ .debug = config.debug, .stack_tracing = config.stack_tracing });
     return .ok;
 }
 
