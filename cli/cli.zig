@@ -140,11 +140,12 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     const file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
     const file_size = if (file.stat()) |s| s.size else |_| blk: {
         std.debug.print("Warning: Failed to get file stats for '{s}'. Using default size.\n", .{file_path});
-        break :blk 1_000_000;
+        break :blk 999_999;
     };
     file.close();
 
     const source = try std.fs.cwd().readFileAlloc(allocator, file_path, file_size);
+    std.debug.assert(source.len == file_size);
     defer allocator.free(source);
 
     const result = interpret(source) catch |err| {
