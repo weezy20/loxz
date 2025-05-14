@@ -17,9 +17,5 @@ pub fn main() !void {
     }
 }
 
-const lib = @import("loxz");
-const Value = lib.Value;
 const std = @import("std");
 const cli = @import("cli");
-const dbg = std.debug.print;
-const op = lib.OpCode;

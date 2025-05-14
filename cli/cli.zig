@@ -147,14 +147,19 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     const source = try std.fs.cwd().readFileAlloc(allocator, file_path, file_size);
     defer allocator.free(source);
 
-    var lines = std.mem.splitSequence(u8, source, "\n");
-    var line_num: usize = 1;
-
-    while (lines.next()) |line| {
-        // Process each line (trim whitespace if needed)
-        const trimmed_line = std.mem.trim(u8, line, " \r");
-        std.debug.print("Line {}: {s}\n", .{ line_num, trimmed_line });
-        line_num += 1;
+    const result = interpret(source) catch |err| {
+        std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
+        std.process.exit(69);
+    };
+    switch (result) {
+        .ok => {},
+        .runtime_error => |err| {
+            std.debug.print("Interpreter Error: {s}", .{errToString(err)});
+            std.process.exit(65);
+        },
+        .compile_error => |_| {
+            std.process.exit(70);
+        },
     }
 }
 
@@ -172,7 +177,7 @@ fn errToString(err: anyerror) []const u8 {
         error.StackOverflow => "Stack overflow",
         error.NaN => "Not a number (NaN)",
         error.DivisionByZero => "Division by zero",
-        error.ValueIndexOutOfBounds => "Value index out of bounds",
+        error.ValueIndexOutOfBounds => "index out of bounds of constant pool",
         error.OutOfMemory => "Out of memory",
         else => "Unknown",
     };
