@@ -74,7 +74,7 @@ fn validate_file(file: []const u8) !void {
 pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
-    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox (use \\ to continue lines)\n");
+    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
 
     if (config.debug) {
         try stdout.writeAll("Debug mode is enabled.\n");
