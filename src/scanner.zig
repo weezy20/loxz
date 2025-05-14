@@ -62,6 +62,17 @@ inline fn skipNonTokens(sc: *Scanner) void {
         }
     }
 }
+/// Returns a string
+inline fn string(sc: *Scanner) Token {
+    while (sc.peek() != '"' and !sc.isAtEnd()) : (sc.current += 1) {
+        if (sc.peek() == '\n') {
+            sc.line += 1;
+        }
+    }
+    if (sc.isAtEnd()) return sc.errorToken("Unterminated string literal");
+    sc.current += 1;
+    return sc.makeToken(TokenType.String);
+}
 
 /// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
@@ -69,7 +80,7 @@ pub fn scanToken(sc: *Scanner) Token {
     sc.start = sc.current;
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
-    const byte = sc.advance(); // Advance current by 1 and return the byte
+    const byte = sc.advance();
     switch (byte) {
         '(' => return makeToken(sc, TokenType.LeftParen),
         ')' => return makeToken(sc, TokenType.RightParen),
@@ -98,6 +109,7 @@ pub fn scanToken(sc: *Scanner) Token {
             makeToken(sc, TokenType.GreaterEqual)
         else
             makeToken(sc, TokenType.Greater),
+        '"' => return sc.string(),
         else => return sc.errorToken("Unexpected character"),
     }
 }
