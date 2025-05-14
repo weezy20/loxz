@@ -76,7 +76,7 @@ inline fn string(sc: *Scanner) Token {
     return sc.makeToken(TokenType.String);
 }
 inline fn number(sc: *Scanner) Token {
-    // Consume integer part digits
+    // Consume integer part digits. peek() ensures !sc.isAtEnd()
     while (sc.peek()) |val| {
         if (isDigit(val)) {
             sc.current += 1;
@@ -85,22 +85,22 @@ inline fn number(sc: *Scanner) Token {
         }
     }
     // Check for decimal point and fractional part
-    var atleast_one = false; // At least 1 digit was found after decimal point?
     if (sc.peek()) |dec| {
-        if (dec == '.') {
+        if (dec == '.' and if (sc.peekNext()) |val| isDigit(val) else false) {
             sc.current += 1; // Consume the '.'
             // Consume fractional digits
             while (sc.peek()) |val| {
                 if (isDigit(val)) {
-                    if (!atleast_one) atleast_one = true;
                     sc.current += 1;
                 } else {
                     break;
                 }
             }
+        } else if (dec == '.') {
+            // Still in decimal, we should find at least one digit after the decimal point
+            return sc.errorToken("No number after decimal point");
         }
     }
-    if (!atleast_one) return sc.errorToken("No number after decimal point");
     return sc.makeToken(TokenType.Number);
 }
 /// Scan from current lexeme until a Token is formed
