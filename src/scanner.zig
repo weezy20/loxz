@@ -7,10 +7,6 @@ line: u32,
 /// Source slice
 source: []const u8,
 
-inline fn isAtEnd(sc: *const Scanner) bool {
-    return sc.current == sc.source.len - 1;
-}
-
 pub fn init(source: []const u8) Scanner {
     return Scanner{ .source = source, .start = 0, .current = 0, .line = 0 };
 }
@@ -21,13 +17,60 @@ inline fn makeToken(sc: *const Scanner, @"type": TokenType) Token {
 inline fn errorToken(sc: *const Scanner, msg: []const u8) Token {
     return Token{ .tokenType = TokenType.Error, .line = sc.line, .lexeme = msg };
 }
+/// If current == source.len, return true
+inline fn isAtEnd(sc: *const Scanner) bool {
+    return sc.current == sc.source.len;
+}
+/// Unsafe. Unchecked increment current index and return the previous byte
+inline fn advance(sc: *Scanner) u8 {
+    sc.current += 1;
+    return sc.source[sc.current - 1];
+}
+/// Check `current` byte and increment it if it matches `expected`
+inline fn match(sc: *Scanner, expected: u8) bool {
+    if (sc.isAtEnd()) return false; // Safety: prevent out of bounds access
+    if (sc.source[sc.current] != expected) return false;
+    sc.current += 1;
+    return true;
+}
 
 /// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
     sc.start = sc.current;
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
-    return sc.errorToken("Unexpected character");
+    const byte = sc.advance(); // Advance current by 1 and return the byte
+    switch (byte) {
+        '(' => return makeToken(sc, TokenType.LeftParen),
+        ')' => return makeToken(sc, TokenType.RightParen),
+        '{' => return makeToken(sc, TokenType.LeftBrace),
+        '}' => return makeToken(sc, TokenType.RightBrace),
+        ';' => return makeToken(sc, TokenType.Semicolon),
+        ',' => return makeToken(sc, TokenType.Comma),
+        '.' => return makeToken(sc, TokenType.Dot),
+        '-' => return makeToken(sc, TokenType.Minus),
+        '+' => return makeToken(sc, TokenType.Plus),
+        '/' => return makeToken(sc, TokenType.Slash),
+        '*' => return makeToken(sc, TokenType.Star),
+        '!' => return if (sc.match('='))
+            makeToken(sc, TokenType.BangEqual)
+        else
+            makeToken(sc, TokenType.Bang),
+        '=' => return if (sc.match('='))
+            makeToken(sc, TokenType.EqualEqual)
+        else
+            makeToken(sc, TokenType.Equal),
+        '<' => return if (sc.match('='))
+            makeToken(sc, TokenType.LessEqual)
+        else
+            makeToken(sc, TokenType.Less),
+        '>' => return if (sc.match('='))
+            makeToken(sc, TokenType.GreaterEqual)
+        else
+            makeToken(sc, TokenType.Greater),
+        ' ' => return sc.scanToken(),
+        else => return sc.errorToken("Unexpected character"),
+    }
 }
 pub const Token = struct {
     tokenType: TokenType, // 1 byte
@@ -46,12 +89,12 @@ fn isAlpha(char: u8) bool {
 }
 
 pub fn printTokens(sc: *Scanner) void {
-    var line: u32 = 0;
+    var line: u32 = undefined;
     while (true) {
         const t = sc.scanToken();
         if (t.line != line) {
-            std.debug.print("{d: <4}", .{line});
             line = t.line;
+            std.debug.print("{d: <4}", .{line});
         } else {
             std.debug.print("   | ", .{});
         }
