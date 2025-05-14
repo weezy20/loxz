@@ -22,7 +22,9 @@ inline fn isAtEnd(sc: *const Scanner) bool {
 }
 /// Unsafe. Unchecked increment current index and return the previous byte
 inline fn advance(sc: *Scanner) u8 {
-    sc.current += 1;
+    if (!sc.isAtEnd()) {
+        sc.current += 1;
+    }
     return sc.source[sc.current - 1];
 }
 /// Check `current` byte and increment it if it matches `expected`
@@ -73,7 +75,34 @@ inline fn string(sc: *Scanner) Token {
     sc.current += 1;
     return sc.makeToken(TokenType.String);
 }
-
+inline fn number(sc: *Scanner) Token {
+    // Consume integer part digits
+    while (sc.peek()) |val| {
+        if (isDigit(val)) {
+            sc.current += 1;
+        } else {
+            break;
+        }
+    }
+    // Check for decimal point and fractional part
+    var atleast_one = false; // At least 1 digit was found after decimal point?
+    if (sc.peek()) |dec| {
+        if (dec == '.') {
+            sc.current += 1; // Consume the '.'
+            // Consume fractional digits
+            while (sc.peek()) |val| {
+                if (isDigit(val)) {
+                    if (!atleast_one) atleast_one = true;
+                    sc.current += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    if (!atleast_one) return sc.errorToken("No number after decimal point");
+    return sc.makeToken(TokenType.Number);
+}
 /// Scan from current lexeme until a Token is formed
 pub fn scanToken(sc: *Scanner) Token {
     sc.skipNonTokens();
@@ -81,6 +110,7 @@ pub fn scanToken(sc: *Scanner) Token {
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
     const byte = sc.advance();
+    if (isDigit(byte)) return sc.number();
     switch (byte) {
         '(' => return makeToken(sc, TokenType.LeftParen),
         ')' => return makeToken(sc, TokenType.RightParen),
@@ -110,6 +140,7 @@ pub fn scanToken(sc: *Scanner) Token {
         else
             makeToken(sc, TokenType.Greater),
         '"' => return sc.string(),
+
         else => return sc.errorToken("Unexpected character"),
     }
 }
