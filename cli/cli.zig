@@ -114,6 +114,23 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         try stdout.writeAll(buffer.items);
         try stdout.writeAll("\n");
 
+        const result = interpret(buffer.items) catch |err| {
+            std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
+            buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
+            continue;
+        };
+        if (result != .ok) {
+            switch (result) {
+                .runtime_error => |err| {
+                    try stdout.writeAll("Interpreter error: ");
+                    const msg = errToString(err);
+                    try stdout.writeAll(msg);
+                    try stdout.writeAll("\n");
+                },
+                else => unreachable,
+            }
+        }
+
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
 }
@@ -139,4 +156,24 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
         std.debug.print("Line {}: {s}\n", .{ line_num, trimmed_line });
         line_num += 1;
     }
+}
+
+fn interpret(source: []const u8) !InterpretResult {
+    if (std.mem.eql(u8, source, "error")) {
+        return error.Foo;
+    }
+    return .ok;
+}
+
+const InterpretResult = @import("loxz").InterpretResult;
+
+fn errToString(err: anyerror) []const u8 {
+    return switch (err) {
+        error.StackOverflow => "Stack overflow",
+        error.NaN => "Not a number (NaN)",
+        error.DivisionByZero => "Division by zero",
+        error.ValueIndexOutOfBounds => "Value index out of bounds",
+        error.OutOfMemory => "Out of memory",
+        else => "Unknown",
+    };
 }

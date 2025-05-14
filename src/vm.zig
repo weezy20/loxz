@@ -165,6 +165,18 @@ pub const InterpretResult = union(enum) {
     runtime_error: RuntimeError,
 };
 
+const CompileError = error{
+    Oops,
+};
+
+const RuntimeError = error{
+    StackOverflow,
+    NaN,
+    DivisionByZero,
+    ValueIndexOutOfBounds,
+    OutOfMemory,
+};
+
 fn div(x: f64, y: f64) f64 {
     return x / y;
 }
@@ -177,18 +189,6 @@ fn add(x: f64, y: f64) f64 {
 fn sub(x: f64, y: f64) f64 {
     return x - y;
 }
-
-const CompileError = error{
-    Oops,
-};
-
-const RuntimeError = error{
-    StackOverflow,
-    NaN,
-    DivisionByZero,
-    ValueIndexOutOfBounds,
-    OutOfMemory,
-};
 
 const std = @import("std");
 const lib = @import("root.zig");
