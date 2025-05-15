@@ -34,38 +34,38 @@ pub fn build(b: *std.Build) void {
         // only contains e.g. external object files, you can make this `null`.
         // In this case the main source file is merely a path, however, in more
         // complicated build scripts, this could be a generated file.
-        .root_source_file = b.path("src/main.zig"),
+        .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
     });
 
     const clap = b.dependency("clap", .{});
     const cli = b.createModule(.{
-        .root_source_file = b.path("src/cli.zig"),
+        .root_source_file = b.path("cli/cli.zig"),
         .target = target,
         .optimize = optimize,
     });
     cli.addImport("clap", clap.module("clap"));
+    cli.addImport("loxz", lib_mod);
 
     // Modules can depend on one another using the `std.Build.Module.addImport` function.
     // This is what allows Zig source code to use `@import("foo")` where 'foo' is not a
     // file path. In this case, we set up `exe_mod` to import `lib_mod`.
-    exe_mod.addImport("loxz", lib_mod);
     exe_mod.addImport("cli", cli);
 
     // Now, we will create a static library based on the module we created above.
     // This creates a `std.Build.Step.Compile`, which is the build step responsible
     // for actually invoking the compiler.
-    const lib = b.addLibrary(.{
-        .linkage = .static,
-        .name = "loxz",
-        .root_module = lib_mod,
-    });
+    // const lib = b.addLibrary(.{
+    //     .linkage = .static,
+    //     .name = "loxz",
+    //     .root_module = lib_mod,
+    // });
 
     // This declares intent for the library to be installed into the standard
     // location when the user invokes the "install" step (the default step when
     // running `zig build`).
-    b.installArtifact(lib);
+    // b.installArtifact(lib);
 
     // This creates another `std.Build.Step.Compile`, but this one builds an executable
     // rather than a static library.
