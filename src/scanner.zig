@@ -75,6 +75,14 @@ inline fn string(sc: *Scanner) Token {
     sc.current += 1;
     return sc.makeToken(TokenType.String);
 }
+inline fn identifier(sc: *Scanner) Token {
+    while (sc.peek()) |id| {
+        if (isAlpha(id) or isDigit(id)) {
+            sc.current += 1;
+        } else break;
+    }
+    return sc.makeToken(TokenType.Identifier);
+}
 inline fn number(sc: *Scanner) Token {
     // Consume integer part digits. peek() ensures !sc.isAtEnd()
     while (sc.peek()) |val| {
@@ -110,7 +118,7 @@ pub fn scanToken(sc: *Scanner) Token {
     if (sc.isAtEnd())
         return sc.makeToken(TokenType.Eof);
     const byte = sc.advance();
-    if (isDigit(byte)) return sc.number();
+    if (isDigit(byte)) return sc.number() else if (isAlpha(byte)) return sc.identifier();
     switch (byte) {
         '(' => return makeToken(sc, TokenType.LeftParen),
         ')' => return makeToken(sc, TokenType.RightParen),
