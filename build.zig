@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("main.zig"),
         .target = target,
         .optimize = optimize,
+        .link_libc = true,
     });
 
     const clap = b.dependency("clap", .{});
