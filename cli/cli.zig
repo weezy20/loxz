@@ -75,7 +75,7 @@ fn validate_file(file: []const u8) !void {
 pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
-    try stdout.writeAll("Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
+    try stdout.writeAll("\u{1F4BB} Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
 
     if (config.debug) {
         try stdout.writeAll("Debug mode is enabled.\n");
@@ -169,15 +169,15 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
         },
     }
 }
-
+/// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const compile_result = lib.compile(source, &chunk, .{ .debug = config.debug, .stack_tracing = config.stack_tracing });
+    const compile_result = lib.compile(source, &chunk, .{ .debug = config.debug });
     if (!compile_result) {
         return .compile_error;
     }
-    return lib.interpret(vm, &chunk, .{});
+    return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing });
 }
 
 const InterpretResult = @import("loxz").InterpretResult;

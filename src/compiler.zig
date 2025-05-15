@@ -1,4 +1,4 @@
-pub fn compile(source: []const u8, chunk: *Chunk, opts: ?struct { debug: bool, stack_tracing: bool }) bool {
+pub fn compile(source: []const u8, chunk: *Chunk, opts: ?struct { debug: bool }) bool {
     _ = opts;
     chunk.*.code = &[_]u8{};
     var sc = @import("scanner.zig").init(source);
