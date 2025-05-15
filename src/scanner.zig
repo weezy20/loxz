@@ -34,12 +34,12 @@ inline fn match(sc: *Scanner, expected: u8) bool {
     sc.current += 1;
     return true;
 }
-/// Peek the current byte without incrementing `current`
+/// Peek the current byte without incrementing `current`. Returns null if we're out of bounds.
 inline fn peek(sc: *const Scanner) ?u8 {
     if (sc.isAtEnd()) return null; // Safety: prevent out of bounds access
     return sc.source[sc.current];
 }
-/// Peek the next byte without incrementing `current`
+/// Peek the next byte without incrementing `current`. Returns null if we're out of bounds.
 inline fn peekNext(sc: *const Scanner) ?u8 {
     if (sc.current + 1 >= sc.source.len) return null; // Safety: prevent out of bounds access
     return sc.source[sc.current + 1];
@@ -75,13 +75,59 @@ inline fn string(sc: *Scanner) Token {
     sc.current += 1;
     return sc.makeToken(TokenType.String);
 }
+fn checkKeyword(sc: *Scanner, start: usize, length: usize, rest: []const u8, keywordTokenType: TokenType) TokenType {
+    if (sc.current - sc.start == start + length and
+        std.mem.eql(u8, sc.source[sc.start + start .. sc.start + start + length], rest))
+    {
+        return keywordTokenType;
+    }
+    return TokenType.Identifier;
+}
+/// Check identifier for keyword
+fn identifierType(sc: *Scanner) TokenType {
+    switch (sc.source[sc.start]) {
+        'a' => return sc.checkKeyword(1, 2, "nd", TokenType.And),
+        'c' => return sc.checkKeyword(1, 4, "lass", TokenType.Class),
+        'e' => return sc.checkKeyword(1, 3, "lse", TokenType.Else),
+        'i' => return sc.checkKeyword(1, 1, "f", TokenType.If),
+        'n' => return sc.checkKeyword(1, 2, "il", TokenType.Nil),
+        'o' => return sc.checkKeyword(1, 1, "r", TokenType.Or),
+        'p' => return sc.checkKeyword(1, 4, "rint", TokenType.Print),
+        'r' => return sc.checkKeyword(1, 5, "eturn", TokenType.Return),
+        's' => return sc.checkKeyword(1, 4, "uper", TokenType.Super),
+        'v' => return sc.checkKeyword(1, 2, "ar", TokenType.Var),
+        'w' => return sc.checkKeyword(1, 4, "hile", TokenType.While),
+        'f' => {
+            if (sc.current - sc.start == 1) {
+                return TokenType.Identifier;
+            }
+            switch (sc.source[sc.start + 1]) {
+                'a' => return sc.checkKeyword(2, 3, "lse", TokenType.False),
+                'o' => return sc.checkKeyword(2, 1, "r", TokenType.For),
+                'u' => return sc.checkKeyword(2, 1, "n", TokenType.Fun),
+                else => return TokenType.Identifier,
+            }
+        },
+        't' => {
+            if (sc.current - sc.start == 1) {
+                return TokenType.Identifier;
+            }
+            switch (sc.source[sc.start + 1]) {
+                'r' => return sc.checkKeyword(2, 2, "ue", TokenType.True),
+                'h' => return sc.checkKeyword(2, 2, "is", TokenType.This),
+                else => return TokenType.Identifier,
+            }
+        },
+        else => return TokenType.Identifier,
+    }
+}
 inline fn identifier(sc: *Scanner) Token {
     while (sc.peek()) |id| {
         if (isAlpha(id) or isDigit(id)) {
             sc.current += 1;
         } else break;
     }
-    return sc.makeToken(TokenType.Identifier);
+    return sc.makeToken(sc.identifierType());
 }
 inline fn number(sc: *Scanner) Token {
     // Consume integer part digits. peek() ensures !sc.isAtEnd()
