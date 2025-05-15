@@ -1,7 +1,7 @@
 pub fn main() !void {
     const allocator = std.heap.c_allocator;
 
-    const config = cli.run(allocator) catch |err| {
+    const config = cli.parseArgs(allocator) catch |err| {
         std.debug.print("Error parsing CLI : {}\n", .{err});
         std.process.exit(128);
     };

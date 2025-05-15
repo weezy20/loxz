@@ -21,7 +21,7 @@ inline fn isAtEnd(sc: *const Scanner) bool {
     return sc.current == sc.source.len;
 }
 /// Unsafe. Unchecked increment current index and return the previous byte
-inline fn advance(sc: *Scanner) u8 {
+pub inline fn advance(sc: *Scanner) u8 {
     if (!sc.isAtEnd()) {
         sc.current += 1;
     }

@@ -1,5 +1,5 @@
 const STACK_MAX = 512;
-const VM = @This();
+pub const VM = @This();
 
 /// Chunk to execute
 chunk: *Chunk,
@@ -161,13 +161,13 @@ inline fn pushNumber(self: *VM, value: f64) RuntimeError!void {
 
 pub const InterpretResult = union(enum) {
     ok,
-    compile_error: CompileError,
+    compile_error,
     runtime_error: RuntimeError,
 };
 
-const CompileError = error{
-    Oops,
-};
+// const CompileError = error{
+//     Oops,
+// };
 
 const RuntimeError = error{
     StackOverflow,

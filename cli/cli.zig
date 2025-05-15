@@ -3,10 +3,11 @@
 const clap = @import("clap");
 const std = @import("std");
 const lib = @import("loxz");
+const VM = lib.VM;
 
 pub const Config = struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 };
 
-pub fn run(allocator: std.mem.Allocator) !Config {
+pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
         \\-h, --help                     Display this help message and exit
         \\-d, --debug                    Enable debug mode
@@ -87,7 +88,8 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     defer buffer.deinit();
     var line_buf: [2048]u8 = [_]u8{0} ** 2048;
     var multi_line = false;
-
+    var vm = lib.initVM(allocator, .{});
+    defer lib.deinitVM(&vm);
     while (true) {
         if (!multi_line) {
             try stdout.writeAll(">> ");
@@ -115,7 +117,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         try stdout.writeAll(buffer.items);
         try stdout.writeAll("\n");
 
-        const result = interpret(buffer.items, config) catch |err| {
+        const result = interpret(buffer.items, config, allocator, &vm) catch |err| {
             std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
             buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
             continue;
@@ -149,7 +151,10 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     std.debug.assert(source.len == file_size);
     defer allocator.free(source);
 
-    const result = interpret(source, config) catch |err| {
+    var vm = lib.initVM(allocator, .{});
+    defer lib.deinitVM(&vm);
+
+    const result = interpret(source, config, allocator, &vm) catch |err| {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
@@ -165,9 +170,14 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     }
 }
 
-fn interpret(source: []const u8, config: *const Config) !InterpretResult {
-    lib.compile(source, .{ .debug = config.debug, .stack_tracing = config.stack_tracing });
-    return .ok;
+fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
+    var chunk = lib.Chunk.init(&allocator);
+    defer chunk.deinit();
+    const compile_result = lib.compile(source, &chunk, .{ .debug = config.debug, .stack_tracing = config.stack_tracing });
+    if (!compile_result) {
+        return .compile_error;
+    }
+    return lib.interpret(vm, &chunk, .{});
 }
 
 const InterpretResult = @import("loxz").InterpretResult;
