@@ -77,7 +77,7 @@ fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize,
 /// Location for chunk bytecode
 /// Used by write functions when creating bytecode for a given chunk
 pub const Location = struct {
-    /// Offset in the bytecode of a given chunk
+    /// Bytecode offset of a given chunk
     offset: usize,
     /// Source line number generating the bytecode at offset
     line: usize,
