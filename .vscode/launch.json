@@ -4,12 +4,20 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug Zig Program",
+            "name": "REPL",
             "program": "${workspaceFolder}/zig-out/bin/loxz",
             "args": [],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "zig build",
-            "postDebugTask": "cleanup",
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Run File",
+            "program" : "${workspaceFolder}/zig-out/bin/loxz",
+            "args": ["${file}"],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "zig build",
         }
     ]
 }

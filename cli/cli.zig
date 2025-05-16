@@ -122,17 +122,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
             buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
             continue;
         };
-        if (result != .ok) {
-            switch (result) {
-                .runtime_error => |err| {
-                    try stdout.writeAll("Interpreter error: ");
-                    const msg = errToString(err);
-                    try stdout.writeAll(msg);
-                    try stdout.writeAll("\n");
-                },
-                else => {},
-            }
-        }
+        try reportResult(result);
 
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
@@ -158,16 +148,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
-    switch (result) {
-        .ok => {},
-        .runtime_error => |err| {
-            std.debug.print("Interpreter Error: {s}", .{errToString(err)});
-            std.process.exit(65);
-        },
-        .compile_error => |_| {
-            std.process.exit(70);
-        },
-    }
+    try reportResult(result);
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
@@ -178,6 +159,24 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
         return .compile_error;
     }
     return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing });
+}
+
+fn reportResult(result: InterpretResult) !void {
+    const stdout = std.io.getStdOut().writer();
+    if (result != .ok) {
+        switch (result) {
+            .runtime_error => |err| {
+                try stdout.writeAll("Interpreter error: ");
+                const msg = errToString(err);
+                try stdout.writeAll(msg);
+                try stdout.writeAll("\n");
+            },
+            .compile_error => {
+                try stdout.writeAll("Compiler error\n");
+            },
+            .ok => {},
+        }
+    }
 }
 
 const InterpretResult = @import("loxz").InterpretResult;

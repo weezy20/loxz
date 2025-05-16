@@ -11,11 +11,6 @@
             },
             "problemMatcher": [],
             "detail": "Build the project using Zig"
-        },
-        {
-            "label": "cleanup",
-            "type": "shell",
-            "command": "echo 'Cleanup complete'"
         }
     ]
 }
