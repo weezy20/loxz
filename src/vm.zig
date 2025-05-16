@@ -52,7 +52,10 @@ fn push(self: *VM, value: Value) RuntimeError!void {
     self.stackTop += 1;
 }
 
-fn pop(self: *VM) Value {
+fn pop(self: *VM) RuntimeError!Value {
+    if (@intFromPtr(self.stackTop) < @intFromPtr(self.stack)) {
+        return RuntimeError.StackUnderflow;
+    }
     self.stackTop -= 1;
     return self.stackTop[0];
 }
@@ -101,12 +104,17 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
         if (self.debugInfo) |d| blk: {
             if (debug_offset >= self.chunk.count) break :blk;
             if (stack_tracing) self.printStack();
-            debug_offset = lib.disassembleInstruction(self.chunk, debug_offset, self.allocator, .{ .debugInfo = d, .prefix = "VM Executing" });
+            debug_offset = lib.disassembleInstruction(
+                self.chunk,
+                debug_offset,
+                self.allocator,
+                .{ .debugInfo = d, .prefix = "VM Executing" },
+            );
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
             .RETURN => {
-                const val = self.pop();
+                const val = try self.pop();
                 std.debug.print("Return Value: {s}\n", .{val});
                 return;
             },
@@ -153,7 +161,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
 }
 
 inline fn popNumber(self: *VM) RuntimeError!f64 {
-    const value = self.pop();
+    const value = try self.pop();
     if (value.isNumber()) |num| {
         return num;
     } else {
@@ -180,6 +188,7 @@ const RuntimeError = error{
     DivisionByZero,
     ValueIndexOutOfBounds,
     OutOfMemory,
+    StackUnderflow,
 };
 
 fn div(x: f64, y: f64) f64 {

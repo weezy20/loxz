@@ -28,6 +28,12 @@ const Parser = struct {
     currentSpan: usize, // TODO: downgrade to u32
 };
 fn spanInfo() [2]usize {
+    std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
+    std.debug.print("Current lexeme:  >> {s} <<  (len {})\n", .{ parser.current.lexeme, parser.current.lexeme.len });
+    std.debug.print("Span: {} - {}\n", .{
+        parser.currentSpan,
+        parser.currentSpan + parser.current.lexeme.len,
+    });
     // Safe: we know that programmers are not going to write a lexeme longer than 2^32
     // const len = std.math.cast(u32, parser.previous.lexeme.len) catch unreachable;
     return [2]usize{
@@ -67,7 +73,7 @@ fn emitBytes(bytes: []const u8) !void {
 /// Advance parser by one token, reporting a token error if found.
 fn advance() void {
     parser.previous = parser.current;
-    parser.currentSpan = parser.previous.lexeme.len;
+    parser.currentSpan += parser.previous.lexeme.len;
     while (true) {
         parser.current = parser.scanner.scanToken();
         if (parser.current.tokenType != TokenType.Error) break;
@@ -77,7 +83,21 @@ fn advance() void {
         parser.had_error = true;
     }
 }
-fn expression() void {}
+fn expression() void {
+    // currentChunk().writeConstant(
+    //     Value{ .Number = 1 },
+    //     parser.debugInfo,
+    //     0,
+    //     .{ 0, 1 },
+    // ) catch {};
+    // currentChunk().writeConstant(
+    //     Value{ .Number = 1 },
+    //     parser.debugInfo,
+    //     0,
+    //     .{ 2, 1 },
+    // ) catch {};
+    // currentChunk().write(@intFromEnum(op.ADD)) catch {};
+}
 fn consume(@"type": TokenType, message: []const u8) void {
     if (parser.current.tokenType == @"type") {
         advance();
@@ -124,17 +144,21 @@ pub fn compile(
     ?CompilerError,
 } {
     compilingChunk = chunk;
-
     if (opts) |o| if (o.debug) {
-        var di = DebugInfo.init(allocator, .{}) catch {
-            // We panic here because it's probably OOM
+        // Allocate DebugInfo on the heap
+        const di_ptr = allocator.create(DebugInfo) catch {
+            @panic("Failed to allocate debug info");
+        };
+        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+            allocator.destroy(di_ptr);
             @panic("Failed to initialize debug info");
         };
-        parser.debugInfo = &di;
+        parser.debugInfo = di_ptr;
     };
     parser.scanner = @import("scanner.zig").init(source);
     advance();
     expression();
+
     consume(TokenType.Eof, "Expect end of expression.");
 
     endCompiler() catch |err| {

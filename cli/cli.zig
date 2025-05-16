@@ -161,6 +161,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
     defer {
         if (compile_result[1]) |d| {
             d.deinit();
+            allocator.destroy(d);
         }
     }
     return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing, .debugInfo = compile_result[1] });
@@ -195,6 +196,7 @@ fn errToString(err: anyerror) []const u8 {
         error.DivisionByZero => "Division by zero",
         error.ValueIndexOutOfBounds => "index out of bounds of constant pool",
         error.OutOfMemory => "Out of memory",
+        error.StackUnderflow => "Stack underflow",
         else => "Unknown",
     };
 }
