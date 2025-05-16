@@ -11,6 +11,7 @@ var parser: Parser = Parser{
     .panic_mode = false,
     .scanner = undefined,
     .debugInfo = null,
+    .currentSpan = 0,
 };
 var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
@@ -23,29 +24,50 @@ const Parser = struct {
     scanner: Scanner,
     /// Generate debugInfo when emitting bytecode
     debugInfo: ?*DebugInfo,
+    /// For spans, we store the starting offset of the previous lexeme
+    currentSpan: usize, // TODO: downgrade to u32
 };
-fn emitByte(byte: u8) void {
+fn spanInfo() [2]usize {
+    // Safe: we know that programmers are not going to write a lexeme longer than 2^32
+    // const len = std.math.cast(u32, parser.previous.lexeme.len) catch unreachable;
+    return [2]usize{
+        parser.currentSpan - parser.previous.lexeme.len,
+        parser.currentSpan,
+    };
+}
+fn emitByte(byte: u8) CompilerError!void {
     if (parser.debugInfo) |d| {
-        currentChunk().writeWithDebugInfo(byte, d, parser.previous.line, .{
-            parser.previous.lexeme.len,
-            parser.current.lexeme.len,
-        }) catch {
-            @panic("Failed to write to Chunk: Out of memory");
+        currentChunk().writeWithDebugInfo(
+            byte,
+            d,
+            parser.previous.line,
+            spanInfo(),
+        ) catch {
+            return CompilerError.OutOfMemory;
         };
     } else {
         currentChunk().write(byte) catch {
-            @panic("Failed to write to Chunk: Out of memory");
+            return CompilerError.OutOfMemory;
         };
     }
 }
-fn emitBytes(bytes: []const u8) void {
+fn emitConstant(value: Value) !void {
+    try currentChunk().writeConstant(
+        value,
+        parser.debugInfo,
+        parser.previous.line,
+        spanInfo(),
+    );
+}
+fn emitBytes(bytes: []const u8) !void {
     for (bytes) |byte| {
-        emitByte(byte);
+        try emitByte(byte);
     }
 }
 /// Advance parser by one token, reporting a token error if found.
 fn advance() void {
     parser.previous = parser.current;
+    parser.currentSpan = parser.previous.lexeme.len;
     while (true) {
         parser.current = parser.scanner.scanToken();
         if (parser.current.tokenType != TokenType.Error) break;
@@ -91,9 +113,15 @@ fn errorAt(token: *Token, msg: []const u8) !void {
     try stderr.writeAll("\n");
 }
 
-pub fn compile(source: []const u8, chunk: *Chunk, allocator: std.mem.Allocator, opts: ?struct { debug: bool }) struct {
+pub fn compile(
+    source: []const u8,
+    chunk: *Chunk,
+    allocator: std.mem.Allocator,
+    opts: ?struct { debug: bool },
+) struct {
     bool,
     ?*DebugInfo,
+    ?CompilerError,
 } {
     compilingChunk = chunk;
 
@@ -108,15 +136,24 @@ pub fn compile(source: []const u8, chunk: *Chunk, allocator: std.mem.Allocator, 
     advance();
     expression();
     consume(TokenType.Eof, "Expect end of expression.");
-    endCompiler();
-    return .{ !parser.had_error, parser.debugInfo };
+
+    endCompiler() catch |err| {
+        return .{ !parser.had_error, parser.debugInfo, err };
+    };
+    return .{ !parser.had_error, parser.debugInfo, null };
 }
-inline fn endCompiler() void {
-    emitReturn();
+inline fn endCompiler() !void {
+    try emitReturn();
 }
-inline fn emitReturn() void {
-    emitByte(@intFromEnum(op.RETURN));
+inline fn emitReturn() !void {
+    try emitByte(@intFromEnum(op.RETURN));
 }
+/// Emit a constant value from "previous" token
+fn number() CompilerError!void {
+    const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch return CompilerError.NaN;
+    try emitConstant(Value{ .Number = val });
+}
+
 const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
 const op = @import("opcode.zig").OpCode;
@@ -124,3 +161,9 @@ const Token = @import("scanner.zig").Token;
 const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
+const Value = @import("value.zig").Value;
+
+const CompilerError = error{
+    OutOfMemory,
+    NaN,
+};
