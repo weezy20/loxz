@@ -26,7 +26,24 @@ const Parser = struct {
     debugInfo: ?*DebugInfo,
     /// For spans, we store the starting offset of the previous lexeme
     currentSpan: usize, // TODO: downgrade to u32
+
+    fn reset(self: *Parser) void {
+        self.previous = Token{
+            .tokenType = TokenType.Error,
+            .line = 0,
+            .lexeme = "",
+        };
+        self.current = Token{
+            .tokenType = TokenType.Error,
+            .line = 0,
+            .lexeme = "",
+        };
+        self.had_error = false;
+        self.panic_mode = false;
+        self.currentSpan = 0;
+    }
 };
+/// Returns span info for the current token
 fn spanInfo() [2]usize {
     std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
     std.debug.print("Current lexeme:  >> {s} <<  (len {})\n", .{ parser.current.lexeme, parser.current.lexeme.len });
@@ -83,21 +100,7 @@ fn advance() void {
         parser.had_error = true;
     }
 }
-fn expression() void {
-    // currentChunk().writeConstant(
-    //     Value{ .Number = 1 },
-    //     parser.debugInfo,
-    //     0,
-    //     .{ 0, 1 },
-    // ) catch {};
-    // currentChunk().writeConstant(
-    //     Value{ .Number = 1 },
-    //     parser.debugInfo,
-    //     0,
-    //     .{ 2, 1 },
-    // ) catch {};
-    // currentChunk().write(@intFromEnum(op.ADD)) catch {};
-}
+fn expression() void {}
 fn consume(@"type": TokenType, message: []const u8) void {
     if (parser.current.tokenType == @"type") {
         advance();
@@ -132,13 +135,7 @@ fn errorAt(token: *Token, msg: []const u8) !void {
     }
     try stderr.writeAll("\n");
 }
-
-pub fn compile(
-    source: []const u8,
-    chunk: *Chunk,
-    allocator: std.mem.Allocator,
-    opts: ?struct { debug: bool },
-) struct {
+pub fn compile(source: []const u8, chunk: *Chunk, allocator: std.mem.Allocator, opts: ?struct { debug: bool }) struct {
     bool,
     ?*DebugInfo,
     ?CompilerError,
@@ -187,7 +184,4 @@ const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
 const Value = @import("value.zig").Value;
 
-const CompilerError = error{
-    OutOfMemory,
-    NaN,
-};
+const CompilerError = error{ OutOfMemory, NaN };
