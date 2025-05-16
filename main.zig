@@ -1,5 +1,8 @@
 pub fn main() !void {
-    const allocator = std.heap.c_allocator;
+    // const allocator = std.heap.c_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer _ = gpa.deinit();
+    const allocator = gpa.allocator();
 
     const config = cli.parseArgs(allocator) catch |err| {
         std.debug.print("Error parsing CLI : {}\n", .{err});

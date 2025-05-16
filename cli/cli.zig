@@ -122,7 +122,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
             buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
             continue;
         };
-        try reportResult(result);
+        try reportResult(result, true);
 
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
@@ -148,20 +148,25 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
-    try reportResult(result);
+    try reportResult(result, false);
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
     const compile_result = lib.compile(source, &chunk, allocator, .{ .debug = config.debug });
-    if (!compile_result) {
+    if (!compile_result[0]) {
         return .compile_error;
     }
-    return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing });
+    defer {
+        if (compile_result[1]) |d| {
+            d.deinit();
+        }
+    }
+    return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing, .debugInfo = compile_result[1] });
 }
 
-fn reportResult(result: InterpretResult) !void {
+fn reportResult(result: InterpretResult, repl_mode: bool) !void {
     const stdout = std.io.getStdOut().writer();
     if (result != .ok) {
         switch (result) {
@@ -172,7 +177,9 @@ fn reportResult(result: InterpretResult) !void {
                 try stdout.writeAll("\n");
             },
             .compile_error => {
-                try stdout.writeAll("Compiler error\n");
+                if (!repl_mode) {
+                    try stdout.writeAll("Compiler error\n");
+                }
             },
             .ok => {},
         }
