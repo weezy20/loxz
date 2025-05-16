@@ -55,7 +55,7 @@ fn advance() void {
         parser.had_error = true;
     }
 }
-
+fn expression() void {}
 fn consume(@"type": TokenType, message: []const u8) void {
     if (parser.current.tokenType == @"type") {
         advance();
@@ -90,7 +90,6 @@ fn errorAt(token: *Token, msg: []const u8) !void {
     }
     try stderr.writeAll("\n");
 }
-fn expression() void {}
 
 pub fn compile(source: []const u8, chunk: *Chunk, allocator: std.mem.Allocator, opts: ?struct { debug: bool }) struct {
     bool,
