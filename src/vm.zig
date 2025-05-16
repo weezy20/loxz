@@ -6,7 +6,7 @@ chunk: *Chunk,
 /// Bytecode instruction pointer
 ip: *u8,
 /// Optional debug info to print during execution
-debugInfo: ?*DebugInfo,
+debugInfo: ?*DebugInfo = null,
 /// Allocator for the VM
 allocator: std.mem.Allocator,
 /// Stack
@@ -14,9 +14,7 @@ stack: *[STACK_MAX]Value,
 /// Stack pointer - points just past the last used element
 stackTop: [*]Value,
 
-pub fn initVM(allocator: std.mem.Allocator, opts: struct {
-    debugInfo: ?*DebugInfo = null,
-}) VM {
+pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
         std.debug.print("Error allocating stack: {s}\n", .{@errorName(err)});
         std.process.exit(101);
@@ -24,7 +22,6 @@ pub fn initVM(allocator: std.mem.Allocator, opts: struct {
     return VM{
         .chunk = undefined,
         .ip = undefined,
-        .debugInfo = opts.debugInfo,
         .allocator = allocator,
         .stack = stackInit,
         .stackTop = stackInit,
@@ -59,13 +56,21 @@ fn pop(self: *VM) Value {
     self.stackTop -= 1;
     return self.stackTop[0];
 }
+
 pub fn deinitVM(self: *VM) void {
     _ = self.allocator.destroy(self.stack);
+    // TODO: Check if this is the right place to free DebugInfo
+    // if (self.debugInfo) |d| {
+    //     self.allocator.destroy(d);
+    // }
 }
 
-pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false }) InterpretResult {
+pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false, debugInfo: ?*DebugInfo = null }) InterpretResult {
     self.chunk = chunk;
     self.ip = &chunk.code[0];
+    if (opts.debugInfo) |d| {
+        self.debugInfo = d;
+    }
     // Enable stack-tracing here
     if (self.run(opts.stack_tracing)) {
         return .ok;

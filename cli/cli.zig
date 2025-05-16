@@ -88,7 +88,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     defer buffer.deinit();
     var line_buf: [2048]u8 = [_]u8{0} ** 2048;
     var multi_line = false;
-    var vm = lib.initVM(allocator, .{});
+    var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
     while (true) {
         if (!multi_line) {
@@ -130,7 +130,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
                     try stdout.writeAll(msg);
                     try stdout.writeAll("\n");
                 },
-                else => unreachable,
+                else => {},
             }
         }
 
@@ -151,7 +151,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
     std.debug.assert(source.len == file_size);
     defer allocator.free(source);
 
-    var vm = lib.initVM(allocator, .{});
+    var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
 
     const result = interpret(source, config, allocator, &vm) catch |err| {
@@ -173,7 +173,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const compile_result = lib.compile(source, &chunk, .{ .debug = config.debug });
+    const compile_result = lib.compile(source, &chunk, allocator, .{ .debug = config.debug });
     if (!compile_result) {
         return .compile_error;
     }
