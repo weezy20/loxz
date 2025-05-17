@@ -11,10 +11,19 @@ pub fn init(source: []const u8) Scanner {
     return Scanner{ .source = source, .start = 0, .current = 0, .line = 0 };
 }
 inline fn makeToken(sc: *const Scanner, @"type": TokenType) Token {
-    return Token{ .tokenType = @"type", .line = sc.line, .lexeme = sc.source[sc.start..sc.current] };
+    return Token{
+        .tokenType = @"type",
+        .line = sc.line,
+        .lexeme = sc.source[sc.start..sc.current],
+    };
 }
 inline fn errorToken(sc: *const Scanner, msg: []const u8) Token {
-    return Token{ .tokenType = TokenType.Error, .line = sc.line, .lexeme = msg };
+    return Token{
+        .tokenType = TokenType.Error,
+        .line = sc.line,
+        .lexeme = sc.source[sc.start..sc.current],
+        .error_msg = msg,
+    };
 }
 /// If current == source.len, return true
 inline fn isAtEnd(sc: *const Scanner) bool {
@@ -202,6 +211,7 @@ pub const Token = struct {
     tokenType: TokenType, // 1 byte
     lexeme: []const u8, // 16 bytes
     line: u32, // 4 bytes
+    error_msg: ?[]const u8 = null, // 16 bytes
 };
 
 fn isDigit(c: u8) bool {

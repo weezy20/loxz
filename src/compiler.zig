@@ -90,17 +90,47 @@ fn emitBytes(bytes: []const u8) !void {
 /// Advance parser by one token, reporting a token error if found.
 fn advance() void {
     parser.previous = parser.current;
+    // Error token lexeme's no longer contain the error message so we can do this
     parser.currentSpan += parser.previous.lexeme.len;
+
     while (true) {
         parser.current = parser.scanner.scanToken();
         if (parser.current.tokenType != TokenType.Error) break;
 
         // Use ErrorAtCurrent since we're reporting the current token
-        ErrorAtCurrent(parser.current.lexeme);
+        ErrorAtCurrent(null);
         parser.had_error = true;
     }
 }
-fn expression() void {}
+/// Emit a constant value from "previous" token
+fn number() CompilerError!void {
+    const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch return CompilerError.NaN;
+    try emitConstant(Value{ .Number = val });
+}
+/// Assumes TokenType.LeftParen is already consumed
+fn grouping() void {
+    expression();
+    consume(TokenType.RightParen, "Expect ')' after expression.");
+}
+/// Prefix unary operator
+fn unary() void {
+    // Fetch the prefix operator
+    const operatorType: TokenType = parser.previous.tokenType;
+    // Compile the operand
+    parsePrecedence(Precedence.Unary);
+    switch (operatorType) {
+        TokenType.Minus => emitByte(@intFromEnum(op.NEGATE)),
+        else => return,
+    }
+}
+/// Parses an expression upto the provided precedence
+fn parsePrecedence(_: Precedence) void {
+    // What goes here?
+}
+/// Emit bytecode for a expression
+fn expression() void {
+    parsePrecedence(Precedence.Assignment);
+}
 fn consume(@"type": TokenType, message: []const u8) void {
     if (parser.current.tokenType == @"type") {
         advance();
@@ -112,21 +142,30 @@ inline fn currentChunk() *Chunk {
     return compilingChunk;
 }
 /// Report error at current token
-fn ErrorAtCurrent(msg: []const u8) void {
+fn ErrorAtCurrent(msg: ?[]const u8) void {
     errorAt(&parser.current, msg) catch {};
 }
 /// Report error at previous token
-fn Error(msg: []const u8) void {
+fn Error(msg: ?[]const u8) void {
     errorAt(&parser.previous, msg) catch {};
 }
-fn errorAt(token: *Token, msg: []const u8) !void {
+fn errorAt(token: *Token, msg: ?[]const u8) !void {
     if (parser.panic_mode) return;
     parser.panic_mode = true;
-    try stderr.print("[line {}] Error: {s}", .{ token.line, msg });
+    const token_error_msg = if (msg) |m| m else if (token.tokenType == TokenType.Error and token.error_msg != null)
+        token.error_msg.?
+    else
+        "Uncaught exception";
+
+    try stderr.print("[line {}] Error: {s}", .{ token.line, token_error_msg });
 
     switch (token.tokenType) {
         .Eof => try stderr.writeAll(" at end"),
-        .Error => {}, // No location info captured for error lexeme
+        .Error => {
+            try stderr.writeAll(" at \"");
+            try stderr.writeAll(token.lexeme);
+            try stderr.writeAll("\"");
+        },
         else => {
             try stderr.writeAll(" (at \"");
             try stderr.writeAll(token.lexeme);
@@ -135,7 +174,12 @@ fn errorAt(token: *Token, msg: []const u8) !void {
     }
     try stderr.writeAll("\n");
 }
-pub fn compile(source: []const u8, chunk: *Chunk, allocator: std.mem.Allocator, opts: ?struct { debug: bool }) struct {
+pub fn compile(
+    source: []const u8,
+    chunk: *Chunk,
+    allocator: std.mem.Allocator,
+    opts: ?struct { debug: bool },
+) struct {
     bool,
     ?*DebugInfo,
     ?CompilerError,
@@ -169,11 +213,6 @@ inline fn endCompiler() !void {
 inline fn emitReturn() !void {
     try emitByte(@intFromEnum(op.RETURN));
 }
-/// Emit a constant value from "previous" token
-fn number() CompilerError!void {
-    const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch return CompilerError.NaN;
-    try emitConstant(Value{ .Number = val });
-}
 
 const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
@@ -185,3 +224,18 @@ const DebugInfo = @import("debug.zig").DebugInfo;
 const Value = @import("value.zig").Value;
 
 const CompilerError = error{ OutOfMemory, NaN };
+
+/// Lowest to highest precedence
+const Precedence = enum {
+    None,
+    Assignment, // =
+    Or, // or
+    And, // and
+    Equality, // == !=
+    Comparison, // < > <= >=
+    Term, // + -
+    Factor, // * /
+    Unary, // ! -
+    Call, // . ()
+    Primary,
+};

@@ -26,6 +26,18 @@ pub const Value = union(enum) {
             else => null,
         };
     }
+    pub fn isString(value: *const Value) ?[]const u8 {
+        return switch (value.*) {
+            .String => |str| str,
+            else => null,
+        };
+    }
+    pub fn isBool(value: *const Value) ?bool {
+        return switch (value.*) {
+            .Bool => |b| b,
+            else => null,
+        };
+    }
 };
 
 /// Value Arrays
