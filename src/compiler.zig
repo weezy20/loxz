@@ -107,6 +107,18 @@ fn number() CompilerError!void {
     const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch return CompilerError.NaN;
     try emitConstant(Value{ .Number = val });
 }
+fn binary() CompilerError!void {
+    const operator_tt: TokenType = parser.previous.tokenType;
+    const rule: *ParseRule = getRule(operator_tt);
+    parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
+    switch (operator_tt) {
+        .Plus => try emitByte(@intFromEnum(op.ADD)),
+        .Minus => try emitByte(@intFromEnum(op.SUBTRACT)),
+        .Star => try emitByte(@intFromEnum(op.MULTIPLY)),
+        .Slash => try emitByte(@intFromEnum(op.DIVIDE)),
+        else => reutrn,
+    }
+}
 /// Assumes TokenType.LeftParen is already consumed
 fn grouping() void {
     expression();
