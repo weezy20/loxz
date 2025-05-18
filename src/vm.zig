@@ -110,6 +110,14 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 self.allocator,
                 .{ .debugInfo = d, .prefix = "VM Executing" },
             );
+        } else {
+            if (stack_tracing) self.printStack();
+            debug_offset = lib.disassembleInstruction(
+                self.chunk,
+                debug_offset,
+                self.allocator,
+                .{ .debugInfo = null, .prefix = "VM Executing" },
+            );
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
