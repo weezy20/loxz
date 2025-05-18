@@ -260,12 +260,14 @@ pub fn compile(
 
     consume(TokenType.Eof, "Expect end of expression.");
 
-    endCompiler() catch |err| {
+    endCompiler(allocator) catch |err| {
         return .{ !parser.had_error, parser.debugInfo, err };
     };
     return .{ !parser.had_error, parser.debugInfo, null };
 }
-inline fn endCompiler() !void {
+/// `allocator` is only used in debug mode
+inline fn endCompiler(allocator: std.mem.Allocator) !void {
+    if (debug_level > 0) currentChunk().disassemble(allocator, "code", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
     try emitReturn();
 }
 inline fn emitReturn() !void {

@@ -123,22 +123,18 @@ pub const Chunk = struct {
     }
 
     /// Inspect a chunk
-    pub fn disassemble(self: *const Chunk, name: ?[]const u8, debugInfo: ?*DebugInfo) !void {
-        if (name) |n| {
-            dbg("=== <{s}> ===\n", .{n});
-        } else {
-            dbg("=== <chunk> ===\n", .{});
-        }
+    pub fn disassemble(self: *const Chunk, allocator: std.mem.Allocator, name: ?[]const u8, debugInfo: ?*DebugInfo) !void {
+        dbg("=== <{s}> === >>\n", .{name orelse "chunk"});
         var offset: usize = 0;
-        var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-        defer _ = gpa.deinit();
-        const allocator = gpa.allocator();
         while (offset < self.count) : (offset = debug.disassembleInstruction(
             self,
             offset,
             allocator,
             .{ .debugInfo = debugInfo, .prefix = name orelse "CHUNK" },
         )) {}
+        if (offset > 0) {
+            dbg("=== <{s}> === <<\n", .{name orelse "chunk"});
+        }
     }
 };
 
