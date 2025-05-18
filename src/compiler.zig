@@ -1,3 +1,4 @@
+var debug_level: u8 = 0;
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
     // For first byte, the line is fetched as parser.previous.line, so we need this
@@ -46,15 +47,29 @@ const Parser = struct {
 pub fn resetParser() void {
     parser.reset();
 }
+fn previousSpanInfo() [2]usize {
+    if (debug_level > 2) {
+        std.debug.print("=== Previous span info === \n", .{});
+        std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
+        std.debug.print("Previous span: {} - {}\n", .{
+            parser.currentSpan - parser.previous.lexeme.len,
+            parser.currentSpan - 1,
+        });
+        std.debug.print("=== Previous span info === \n", .{});
+    }
+    // Returns the span for the previous token (exclusive of current)
+    return [2]usize{
+        parser.currentSpan - parser.previous.lexeme.len,
+        parser.currentSpan - 1,
+    };
+}
 /// Returns span info for the current token
 fn spanInfo() [2]usize {
-    if (parser.debugInfo) |_| {
+    if (debug_level > 2) {
+        std.debug.print("=== Current span info === \n", .{});
         std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
         std.debug.print("Current lexeme:  >> {s} <<  (len {})\n", .{ parser.current.lexeme, parser.current.lexeme.len });
-        std.debug.print("Span: {} - {}\n", .{
-            parser.currentSpan,
-            parser.currentSpan + parser.current.lexeme.len,
-        });
+        std.debug.print("=== Current span info === \n", .{});
     }
     // Safe: we know that programmers are not going to write a lexeme longer than 2^32
     // const len = std.math.cast(u32, parser.previous.lexeme.len) catch unreachable;
@@ -176,13 +191,13 @@ inline fn currentChunk() *Chunk {
 }
 /// Report error at current token
 fn ErrorAtCurrent(msg: ?[]const u8) void {
-    errorAt(&parser.current, msg) catch {};
+    errorAt(&parser.current, msg, spanInfo()) catch {};
 }
 /// Report error at previous token
 fn Error(msg: ?[]const u8) void {
-    errorAt(&parser.previous, msg) catch {};
+    errorAt(&parser.previous, msg, previousSpanInfo()) catch {};
 }
-fn errorAt(token: *Token, msg: ?[]const u8) !void {
+fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     parser.had_error = true;
     if (parser.panic_mode) return;
     parser.panic_mode = true;
@@ -194,16 +209,22 @@ fn errorAt(token: *Token, msg: ?[]const u8) !void {
     try stderr.print("[line {}] Error: {s}", .{ token.line, token_error_msg });
 
     switch (token.tokenType) {
-        .Eof => try stderr.writeAll(" at end"),
+        .Eof => try stderr.writeAll(" (at end)"),
         .Error => {
             try stderr.writeAll(" at \"");
             try stderr.writeAll(token.lexeme);
             try stderr.writeAll("\"");
+            if (span) |s| if (debug_level > 0) {
+                try stderr.print(" [lex {}..{}]", .{ s[0], s[1] - 1 });
+            };
         },
         else => {
             try stderr.writeAll(" (at \"");
             try stderr.writeAll(token.lexeme);
             try stderr.writeAll("\")");
+            if (span) |s| if (debug_level > 0) {
+                try stderr.print(" [lex {d}..{d}]", .{ s[0], s[1] });
+            };
         },
     }
     try stderr.writeAll("\n");
@@ -212,24 +233,27 @@ pub fn compile(
     source: []const u8,
     chunk: *Chunk,
     allocator: std.mem.Allocator,
-    opts: ?struct { debug: bool },
+    opts: ?struct { debug: bool, debug_level: ?u8 },
 ) struct {
     bool,
     ?*DebugInfo,
     ?CompilerError,
 } {
     compilingChunk = chunk;
-    if (opts) |o| if (o.debug) {
-        // Allocate DebugInfo on the heap
-        const di_ptr = allocator.create(DebugInfo) catch {
-            @panic("Failed to allocate debug info");
-        };
-        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
-            allocator.destroy(di_ptr);
-            @panic("Failed to initialize debug info");
-        };
-        parser.debugInfo = di_ptr;
-    };
+    if (opts) |o| {
+        if (o.debug) {
+            // Allocate DebugInfo on the heap
+            const di_ptr = allocator.create(DebugInfo) catch {
+                @panic("Failed to allocate debug info");
+            };
+            di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+                allocator.destroy(di_ptr);
+                @panic("Failed to initialize debug info");
+            };
+            parser.debugInfo = di_ptr;
+        }
+        if (o.debug_level) |lvl| debug_level = lvl;
+    }
     parser.scanner = Scanner.init(source);
     advance();
     expression();

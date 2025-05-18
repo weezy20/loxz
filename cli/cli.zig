@@ -5,7 +5,7 @@ const std = @import("std");
 const lib = @import("loxz");
 const VM = lib.VM;
 
-pub const Config = struct { debug: bool, stack_tracing: bool, file_path: ?[]const u8 };
+pub const Config = struct { debug: bool, debug_level: u8, stack_tracing: bool, file_path: ?[]const u8 };
 
 pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
@@ -34,6 +34,7 @@ pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     return .{
         // Provide false as default if the flags weren't provided
         .debug = res.args.debug != 0,
+        .debug_level = if (res.args.debug > 0) res.args.debug else 0,
         .stack_tracing = res.args.@"stack-tracing" != 0,
         .file_path = if (res.positionals.len > 0) blk: {
             const filename: []const u8 = res.positionals[0] orelse break :blk null;
@@ -78,7 +79,11 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     try stdout.writeAll("\u{1F4BB} Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
 
     if (config.debug) {
-        try stdout.writeAll("Debug mode is enabled.\n");
+        try stdout.writeAll("Debug mode is enabled.");
+        if (config.debug_level > 1) {
+            try stdout.print(" Debug level {}.", .{config.debug_level});
+        }
+        try stdout.writeAll("\n");
     }
     if (config.stack_tracing) {
         try stdout.writeAll("Stack tracing is enabled.\n");
@@ -113,7 +118,6 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         }
 
         // If we get here, the input is complete
-        try stdout.writeAll("You entered: ");
         try stdout.writeAll(buffer.items);
         try stdout.writeAll("\n");
 
@@ -158,7 +162,10 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const compile_result = lib.compile(source, &chunk, allocator, .{ .debug = config.debug });
+    const compile_result = lib.compile(source, &chunk, allocator, .{
+        .debug = config.debug,
+        .debug_level = config.debug_level,
+    });
     if (!compile_result[0]) {
         return .compile_error;
     }
