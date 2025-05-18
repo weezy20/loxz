@@ -43,6 +43,9 @@ const Parser = struct {
         self.currentSpan = 0;
     }
 };
+pub fn resetParser() void {
+    parser.reset();
+}
 /// Returns span info for the current token
 fn spanInfo() [2]usize {
     if (parser.debugInfo) |_| {
@@ -101,7 +104,6 @@ fn advance() void {
 
         // Use ErrorAtCurrent since we're reporting the current token
         ErrorAtCurrent(null);
-        parser.had_error = true;
     }
 }
 /// Emit a constant value from "previous" token
@@ -181,6 +183,7 @@ fn Error(msg: ?[]const u8) void {
     errorAt(&parser.previous, msg) catch {};
 }
 fn errorAt(token: *Token, msg: ?[]const u8) !void {
+    parser.had_error = true;
     if (parser.panic_mode) return;
     parser.panic_mode = true;
     const token_error_msg = if (msg) |m| m else if (token.tokenType == TokenType.Error and token.error_msg != null)

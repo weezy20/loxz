@@ -122,6 +122,10 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
             buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
             continue;
         };
+        if (result != .ok) {
+            vm.resetStack();
+            lib.resetParser();
+        }
         try reportResult(result, true);
 
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
