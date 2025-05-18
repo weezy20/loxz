@@ -103,20 +103,27 @@ fn advance() void {
     }
 }
 /// Emit a constant value from "previous" token
-fn number() CompilerError!void {
-    const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch return CompilerError.NaN;
-    try emitConstant(Value{ .Number = val });
+fn number() void {
+    const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch unreachable;
+    emitConstant(Value{ .Number = val }) catch @panic(BYTECODE_FAIL);
 }
-fn binary() CompilerError!void {
+/// Assumes the left operand is compiled and infix operator is consumed.
+/// Since Lox uses left-to-right associativity, this is exactly what we want.
+/// Based on the operator type, we parse the correct infix expression
+fn binary() void {
     const operator_tt: TokenType = parser.previous.tokenType;
-    const rule: *ParseRule = getRule(operator_tt);
+    const rule: *const ParseRule = getRule(operator_tt);
+    // ensures that the right-hand side of the operator is parsed with precedence one level higher than the operator itself.
+    // For example:  2 + 3 * 4, the precedence of the multiplication is higher than the addition, so the right side
+    // of + is parsed with the precedence of multiplication
     parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
+    // Finally we emit the bytecode for the operator
     switch (operator_tt) {
-        .Plus => try emitByte(@intFromEnum(op.ADD)),
-        .Minus => try emitByte(@intFromEnum(op.SUBTRACT)),
-        .Star => try emitByte(@intFromEnum(op.MULTIPLY)),
-        .Slash => try emitByte(@intFromEnum(op.DIVIDE)),
-        else => reutrn,
+        .Plus => emitByte(@intFromEnum(op.ADD)) catch @panic(BYTECODE_FAIL),
+        .Minus => emitByte(@intFromEnum(op.SUBTRACT)) catch @panic(BYTECODE_FAIL),
+        .Star => emitByte(@intFromEnum(op.MULTIPLY)) catch @panic(BYTECODE_FAIL),
+        .Slash => emitByte(@intFromEnum(op.DIVIDE)) catch @panic(BYTECODE_FAIL),
+        else => return, // Unreachable
     }
 }
 /// Assumes TokenType.LeftParen is already consumed
@@ -131,13 +138,18 @@ fn unary() void {
     // Compile the operand
     parsePrecedence(Precedence.Unary);
     switch (operatorType) {
-        TokenType.Minus => emitByte(@intFromEnum(op.NEGATE)),
+        TokenType.Minus => emitByte(@intFromEnum(op.NEGATE)) catch @panic(BYTECODE_FAIL),
         else => return,
     }
 }
 /// Parses an expression upto the provided precedence
 fn parsePrecedence(_: Precedence) void {
-    // What goes here?
+    advance();
+    const prefix_rule = getRule(parser.previous.tokenType).prefix;
+    if (prefix_rule == null) {
+        Error("Expect expression");
+    }
+    prefix_rule.?();
 }
 /// Emit bytecode for a expression
 fn expression() void {
@@ -208,7 +220,7 @@ pub fn compile(
         };
         parser.debugInfo = di_ptr;
     };
-    parser.scanner = @import("scanner.zig").init(source);
+    parser.scanner = Scanner.init(source);
     advance();
     expression();
 
@@ -234,8 +246,15 @@ const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
 const Value = @import("value.zig").Value;
-
-const CompilerError = error{ OutOfMemory, NaN };
+const BYTECODE_FAIL = "fatal: failed to emit bytecode";
+const CompilerError = error{
+    /// Not enough memory
+    OutOfMemory,
+    /// Not a number
+    NaN,
+    /// Unreachable compiler state
+    Unreachable,
+};
 
 /// Lowest to highest precedence
 const Precedence = enum {
@@ -250,4 +269,103 @@ const Precedence = enum {
     Unary, // ! -
     Call, // . ()
     Primary,
+};
+
+const ParseRule = struct {
+    prefix: ?*const fn () void,
+    infix: ?*const fn () void,
+    precedence: Precedence,
+};
+
+/// - **In C:** The function indirection (`getRule()`) is needed to avoid declaration cycles.
+/// ParseRule contains a function ptr to `binary()` and `unary()`, but if they want to use the table, the table must be declared first.
+/// The table cannot be declared first because it contains function ptrs to `binary()` and `unary()`, which are not declared yet.
+/// Hence the book describes a workaround where the function is declared first, and then the table is declared.
+/// - **In Zig:** We do **not** need this workaround; you can access the table directly from any function, regardless of order.
+/// This function is here just to follow the book's example.
+fn getRule(tokenType: TokenType) *const ParseRule {
+    return &rules[@intFromEnum(tokenType)];
+}
+
+const rules = [_]ParseRule{
+    // TOKEN_LEFT_PAREN
+    ParseRule{ .prefix = grouping, .infix = null, .precedence = Precedence.None },
+    // TOKEN_RIGHT_PAREN
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_LEFT_BRACE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_RIGHT_BRACE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_COMMA
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_DOT
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_MINUS
+    ParseRule{ .prefix = unary, .infix = binary, .precedence = Precedence.Term },
+    // TOKEN_PLUS
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Term },
+    // TOKEN_SEMICOLON
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_SLASH
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
+    // TOKEN_STAR
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
+    // TOKEN_BANG
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_BANG_EQUAL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_EQUAL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_EQUAL_EQUAL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_GREATER
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_GREATER_EQUAL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_LESS
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_LESS_EQUAL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_IDENTIFIER
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_STRING
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_NUMBER
+    ParseRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
+    // TOKEN_AND
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_CLASS
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_ELSE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_FALSE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_FOR
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_FUN
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_IF
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_NIL
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_OR
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_PRINT
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_RETURN
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_SUPER
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_THIS
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_TRUE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_VAR
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_WHILE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_ERROR
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_EOF
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
 };
