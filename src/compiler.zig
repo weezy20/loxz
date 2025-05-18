@@ -45,12 +45,14 @@ const Parser = struct {
 };
 /// Returns span info for the current token
 fn spanInfo() [2]usize {
-    std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
-    std.debug.print("Current lexeme:  >> {s} <<  (len {})\n", .{ parser.current.lexeme, parser.current.lexeme.len });
-    std.debug.print("Span: {} - {}\n", .{
-        parser.currentSpan,
-        parser.currentSpan + parser.current.lexeme.len,
-    });
+    if (parser.debugInfo) |_| {
+        std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
+        std.debug.print("Current lexeme:  >> {s} <<  (len {})\n", .{ parser.current.lexeme, parser.current.lexeme.len });
+        std.debug.print("Span: {} - {}\n", .{
+            parser.currentSpan,
+            parser.currentSpan + parser.current.lexeme.len,
+        });
+    }
     // Safe: we know that programmers are not going to write a lexeme longer than 2^32
     // const len = std.math.cast(u32, parser.previous.lexeme.len) catch unreachable;
     return [2]usize{
@@ -143,13 +145,18 @@ fn unary() void {
     }
 }
 /// Parses an expression upto the provided precedence
-fn parsePrecedence(_: Precedence) void {
+fn parsePrecedence(precedence: Precedence) void {
     advance();
     const prefix_rule = getRule(parser.previous.tokenType).prefix;
-    if (prefix_rule == null) {
+    if (prefix_rule) |rule| rule() else {
         Error("Expect expression");
+        return;
     }
-    prefix_rule.?();
+    while (@intFromEnum(precedence) <= @intFromEnum(getRule(parser.current.tokenType).precedence)) {
+        advance();
+        const infix_rule = getRule(parser.previous.tokenType).infix;
+        infix_rule.?();
+    }
 }
 /// Emit bytecode for a expression
 fn expression() void {
