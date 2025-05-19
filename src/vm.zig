@@ -180,25 +180,6 @@ inline fn pushNumber(self: *VM, value: f64) RuntimeError!void {
     try self.push(Value{ .Number = value });
 }
 
-pub const InterpretResult = union(enum) {
-    ok,
-    compile_error,
-    runtime_error: RuntimeError,
-};
-
-// const CompileError = error{
-//     Oops,
-// };
-
-const RuntimeError = error{
-    StackOverflow,
-    NaN,
-    DivisionByZero,
-    ValueIndexOutOfBounds,
-    OutOfMemory,
-    StackUnderflow,
-};
-
 fn div(x: f64, y: f64) f64 {
     return x / y;
 }
@@ -218,3 +199,5 @@ const Chunk = lib.Chunk;
 const OpCode = lib.OpCode;
 const Value = lib.Value;
 const DebugInfo = lib.DebugInfo;
+const InterpretResult = lib.InterpretResult;
+const RuntimeError = lib.RuntimeError;

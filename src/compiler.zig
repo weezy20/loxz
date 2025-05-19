@@ -283,14 +283,7 @@ const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
 const Value = @import("value.zig").Value;
 const BYTECODE_FAIL = "fatal: failed to emit bytecode";
-const CompilerError = error{
-    /// Not enough memory
-    OutOfMemory,
-    /// Not a number
-    NaN,
-    /// Unreachable compiler state
-    Unreachable,
-};
+const CompilerError = @import("error.zig").CompilerError;
 
 /// Lowest to highest precedence
 const Precedence = enum {
