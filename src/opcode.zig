@@ -17,4 +17,7 @@ pub const OpCode = enum(u8) {
     NOT,
     // AND,
     // OR,
+    EQUAL,
+    LESS,
+    GREATER,
 };
