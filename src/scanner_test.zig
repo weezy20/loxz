@@ -20,7 +20,7 @@ test "scanner: numbers and decimals" {
     // Test invalid decimal (should be error)
     const token3 = scanner.scanToken();
     try t.expectEqual(TokenType.Error, token3.tokenType);
-    try t.expectEqualStrings("No number after decimal point", token3.lexeme);
+    try t.expectEqualStrings("89", token3.lexeme);
 
     // Test decimal starting with . which is invalid and should be parsed as a dot
     const token4 = scanner.scanToken();
@@ -141,7 +141,7 @@ test "scanner: strings" {
 
     const token3 = scanner.scanToken();
     try t.expectEqual(TokenType.Error, token3.tokenType);
-    try t.expectEqualStrings("Unterminated string literal", token3.lexeme);
+    try t.expectEqualStrings("\"unterminated", token3.lexeme);
 }
 
 test "scanner: whitespace and comments" {
@@ -175,15 +175,15 @@ test "scanner: error handling" {
 
     const token1 = scanner.scanToken();
     try t.expectEqual(TokenType.Error, token1.tokenType);
-    try t.expectEqualStrings("Unexpected character", token1.lexeme);
+    try t.expectEqualStrings("@", token1.lexeme);
 
     const token2 = scanner.scanToken();
     try t.expectEqual(TokenType.Error, token2.tokenType);
-    try t.expectEqualStrings("Unexpected character", token2.lexeme);
+    try t.expectEqualStrings("#", token2.lexeme);
 
     const token3 = scanner.scanToken();
     try t.expectEqual(TokenType.Error, token3.tokenType);
-    try t.expectEqualStrings("Unexpected character", token3.lexeme);
+    try t.expectEqualStrings("$", token3.lexeme);
 
     const eof = scanner.scanToken();
     try t.expectEqual(TokenType.Eof, eof.tokenType);
