@@ -206,7 +206,7 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     else
         "Uncaught exception";
 
-    try stderr.print("[line {}] Error: {s}", .{ token.line, token_error_msg });
+    try stderr.print("\x1b[31m[line {}] Error: {s}\x1b[0m", .{ token.line, token_error_msg });
 
     switch (token.tokenType) {
         .Eof => try stderr.writeAll(" (at end)"),
