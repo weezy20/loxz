@@ -101,9 +101,9 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         } else {
             try stdout.writeAll("...  ");
         }
-
+        // This is a subslice of `line_buf`
         const bytes_read = try stdin.readUntilDelimiter(&line_buf, '\n');
-
+        std.debug.assert(bytes_read.ptr == &line_buf);
         try buffer.appendSlice(bytes_read);
 
         // Check if the line ends with '\' (escaped newline)
