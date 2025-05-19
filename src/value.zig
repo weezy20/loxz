@@ -16,7 +16,7 @@ pub const Value = union(enum) {
         switch (self) {
             .Number => try writer.print("Number {d}", .{self.Number}),
             .String => try writer.print("String \"{s}\"", .{self.String}),
-            .Bool => try writer.print("Bool {s}", .{if (self.Bool) "true" else "false"}),
+            .Bool => try writer.print("Boolean {s}", .{if (self.Bool) "true" else "false"}),
             .Nil => try writer.writeAll("Nil"),
         }
     }
