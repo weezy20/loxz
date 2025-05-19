@@ -38,6 +38,9 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .SUBTRACT => return simpleInstruction("OP_SUBTRACT", byte_offset, src_info),
         .MULTIPLY => return simpleInstruction("OP_MULTIPLY", byte_offset, src_info),
         .DIVIDE => return simpleInstruction("OP_DIVIDE", byte_offset, src_info),
+        .TRUE => return simpleInstruction("OP_TRUE", byte_offset, src_info),
+        .FALSE => return simpleInstruction("OP_FALSE", byte_offset, src_info),
+        .NIL => return simpleInstruction("OP_NIL", byte_offset, src_info),
     }
 }
 

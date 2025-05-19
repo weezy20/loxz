@@ -121,6 +121,15 @@ fn advance() void {
         ErrorAtCurrent(null);
     }
 }
+/// Emit a literal from "previous"
+fn literal() void {
+    switch (parser.previous.tokenType) {
+        .True => emitByte(@intFromEnum(op.TRUE)) catch @panic(BYTECODE_FAIL),
+        .False => emitByte(@intFromEnum(op.FALSE)) catch @panic(BYTECODE_FAIL),
+        .Nil => emitByte(@intFromEnum(op.NIL)) catch @panic(BYTECODE_FAIL),
+        else => return,
+    }
+}
 /// Emit a constant value from "previous" token
 fn number() void {
     const val = std.fmt.parseFloat(f64, parser.previous.lexeme) catch unreachable;
@@ -368,7 +377,7 @@ const rules = [_]ParseRule{
     // TOKEN_ELSE
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_FALSE
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_FOR
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_FUN
@@ -376,7 +385,7 @@ const rules = [_]ParseRule{
     // TOKEN_IF
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_NIL
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_OR
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_PRINT
@@ -388,7 +397,7 @@ const rules = [_]ParseRule{
     // TOKEN_THIS
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_TRUE
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_VAR
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_WHILE

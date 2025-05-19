@@ -165,6 +165,17 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                 }
                 try self.pushNumber(div(lhs, rhs));
             },
+            .TRUE, .FALSE => {
+                const boolean = switch (instruction) {
+                    .TRUE => true,
+                    .FALSE => false,
+                    else => unreachable,
+                };
+                try self.push(Value{ .Bool = boolean });
+            },
+            .NIL => {
+                try self.push(Value.Nil);
+            },
         }
     }
 }
