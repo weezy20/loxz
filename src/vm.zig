@@ -68,14 +68,14 @@ pub fn deinitVM(self: *VM) void {
     // }
 }
 
-pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false, debugInfo: ?*DebugInfo = null }) InterpretResult {
+pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false, debug_level: u8, debugInfo: ?*DebugInfo = null }) InterpretResult {
     self.chunk = chunk;
     self.ip = &chunk.code[0];
     if (opts.debugInfo) |d| {
         self.debugInfo = d;
     }
     // Enable stack-tracing here
-    if (self.run(opts.stack_tracing)) {
+    if (self.run(opts.stack_tracing, opts.debug_level)) {
         return .ok;
     } else |err| {
         return .{ .runtime_error = err };
@@ -98,26 +98,27 @@ inline fn readConstant(self: *VM, long: bool) usize {
     }
 }
 
-fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
+fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
     var debug_offset: usize = 0;
     while (debug_offset < self.chunk.count) {
-        if (self.debugInfo) |d| blk: {
-            if (debug_offset >= self.chunk.count) break :blk;
-            if (stack_tracing) self.printStack();
-            debug_offset = lib.disassembleInstruction(
-                self.chunk,
-                debug_offset,
-                self.allocator,
-                .{ .debugInfo = d, .prefix = "VM Executing" },
-            );
-        } else {
-            if (stack_tracing) self.printStack();
-            debug_offset = lib.disassembleInstruction(
-                self.chunk,
-                debug_offset,
-                self.allocator,
-                .{ .debugInfo = null, .prefix = "VM Executing" },
-            );
+        if (stack_tracing) self.printStack();
+        if (debug_level > 0) {
+            if (self.debugInfo) |d| blk: {
+                if (debug_offset >= self.chunk.count) break :blk;
+                debug_offset = lib.disassembleInstruction(
+                    self.chunk,
+                    debug_offset,
+                    self.allocator,
+                    .{ .debugInfo = d, .prefix = "VM Executing" },
+                );
+            } else {
+                debug_offset = lib.disassembleInstruction(
+                    self.chunk,
+                    debug_offset,
+                    self.allocator,
+                    .{ .debugInfo = null, .prefix = "VM Executing" },
+                );
+            }
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {

@@ -175,7 +175,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
             allocator.destroy(d);
         }
     }
-    return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing, .debugInfo = compile_result[1] });
+    return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing, .debug_level = config.debug_level, .debugInfo = compile_result[1] });
 }
 
 fn reportResult(result: InterpretResult, repl_mode: bool) !void {
