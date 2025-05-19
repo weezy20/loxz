@@ -51,7 +51,7 @@ pub const Value = union(enum) {
     //         .Nil => true, // Nil == Nil is true
     //     };
     // }
-    pub fn isEqual(self: *const Value, other: *const Value) bool {
+    pub inline fn isEqual(self: *const Value, other: *const Value) bool {
         return std.meta.eql(self.*, other.*);
     }
 };
