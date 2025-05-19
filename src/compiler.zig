@@ -167,6 +167,7 @@ fn unary() void {
     parsePrecedence(Precedence.Unary);
     switch (operatorType) {
         TokenType.Minus => emitByte(@intFromEnum(op.NEGATE)) catch @panic(BYTECODE_FAIL),
+        TokenType.Bang => emitByte(@intFromEnum(op.NOT)) catch @panic(BYTECODE_FAIL),
         else => return,
     }
 }
@@ -349,7 +350,7 @@ const rules = [_]ParseRule{
     // TOKEN_STAR
     ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
     // TOKEN_BANG
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = unary, .infix = null, .precedence = Precedence.None },
     // TOKEN_BANG_EQUAL
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_EQUAL

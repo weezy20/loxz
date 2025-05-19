@@ -176,6 +176,14 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
             .NIL => {
                 try self.push(Value.Nil);
             },
+            .NOT => {
+                const val: Value = (self.stackTop - 1)[0];
+                if (val.isBool()) |b| {
+                    (self.stackTop - 1)[0] = Value{ .Bool = !b };
+                } else {
+                    return RuntimeError.InvalidLogicalNot;
+                }
+            },
         }
     }
 }
