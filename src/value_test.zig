@@ -8,11 +8,15 @@ test "ValueArray" {
     try array.write(Value{ .Bool = true }, allocator);
     try array.write(Value{ .Nil = undefined }, allocator);
 
-    std.debug.assert(array.count == 4);
-    std.debug.assert(array.capacity == 8);
+    try std.testing.expect(array.count == 4);
+    try std.testing.expect(array.capacity == 8);
 
-    std.debug.assert(@sizeOf(ValueArray) == 4 * @sizeOf(usize)); // 32 bytes size
-    std.debug.assert(@alignOf(ValueArray) == @alignOf(u64)); // 8 byte alignment
+    try std.testing.expect(@sizeOf(ValueArray) == 4 * @sizeOf(usize)); // 32 bytes size
+    try std.testing.expect(@alignOf(ValueArray) == @alignOf(u64)); // 8 byte alignment
+}
+
+test "Values" {
+    try std.testing.expect(@sizeOf(Value) == 3 * @sizeOf(usize));
 }
 
 test "deinit values" {
