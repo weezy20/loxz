@@ -35,6 +35,8 @@ pub const Value = union(enum) {
     pub fn isBool(value: *const Value) ?bool {
         return switch (value.*) {
             .Bool => |b| b,
+            // Dynamic typing, thus:
+            .Nil => false,
             else => null,
         };
     }
