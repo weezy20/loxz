@@ -102,17 +102,12 @@ fn emitConstant(value: Value) !void {
         spanInfo(),
     );
 }
-fn emitBytes(bytes: []const u8) !void {
-    for (bytes) |byte| {
-        try emitByte(byte);
-    }
-}
 const emit = struct {
     fn byte(b: op) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
-    fn bytes(b: []const op) void {
-        emitBytes(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
+    fn bytes(ops: []const op) void {
+        for (ops) |b| emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
 };
 
