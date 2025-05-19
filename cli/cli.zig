@@ -89,7 +89,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
         try stdout.writeAll("Stack tracing is enabled.\n");
     }
 
-    var buffer = std.ArrayList(u8).init(allocator);
+    var buffer = try std.ArrayList(u8).initCapacity(allocator, 128);
     defer buffer.deinit();
     var line_buf: [2048]u8 = [_]u8{0} ** 2048;
     var multi_line = false;
