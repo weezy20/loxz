@@ -161,9 +161,9 @@ fn binary() void {
         .BangEqual => emit.bytes(&.{ op.EQUAL, op.NOT }),
         .EqualEqual => emit.byte(op.EQUAL),
         .Greater => emit.byte(op.GREATER),
-        .GreaterEqual => emit.bytes(.{ op.LESS, op.NOT }),
+        .GreaterEqual => emit.bytes(&.{ op.LESS, op.NOT }),
         .Less => emit.byte(op.LESS),
-        .LessEqual => emit.byte(.{ op.GREATER, op.NOT }),
+        .LessEqual => emit.bytes(&.{ op.GREATER, op.NOT }),
         else => return, // Unreachable
     }
 }

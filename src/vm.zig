@@ -181,7 +181,7 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                 if (val.isBool()) |b| {
                     (self.stackTop - 1)[0] = Value{ .Bool = !b };
                 } else {
-                    return RuntimeError.InvalidLogicalNot;
+                    return RuntimeError.InvalidNot;
                 }
             },
             .EQUAL => {
@@ -189,8 +189,18 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                 if (b.isBool()) |b_bool| if (a.isBool()) |a_bool| {
                     try self.push(Value{ .Bool = a_bool == b_bool });
                 } else {
-                    return RuntimeError.InvalidLogicalEquality;
+                    return RuntimeError.InvalidEquality;
                 };
+            },
+            .GREATER => {
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                try self.push(Value{ .Bool = lhs > rhs });
+            },
+            .LESS => {
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                try self.push(Value{ .Bool = lhs < rhs });
             },
         }
     }

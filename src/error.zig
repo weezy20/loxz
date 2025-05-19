@@ -22,6 +22,7 @@ pub const RuntimeError = error{
     ValueIndexOutOfBounds,
     OutOfMemory,
     StackUnderflow,
-    InvalidLogicalNot,
-    InvalidLogicalEquality,
+    InvalidNot,
+    InvalidEquality,
+    InvalidComparison,
 };

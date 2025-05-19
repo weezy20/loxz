@@ -40,6 +40,20 @@ pub const Value = union(enum) {
             else => null,
         };
     }
+    // pub fn isEqual(self: *const Value, other: *const Value) bool {
+    //     if (@intFromEnum(self.*) != @intFromEnum(other.*)) {
+    //         return false;
+    //     }
+    //     return switch (self.*) {
+    //         .Number => self.Number == other.Number,
+    //         .String => std.mem.eql(u8, self.String, other.String),
+    //         .Bool => self.Bool == other.Bool,
+    //         .Nil => true, // Nil == Nil is true
+    //     };
+    // }
+    pub fn isEqual(self: *const Value, other: *const Value) bool {
+        return std.meta.eql(self.*, other.*);
+    }
 };
 
 /// Value Arrays

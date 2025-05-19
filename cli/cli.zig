@@ -183,7 +183,7 @@ fn reportResult(result: InterpretResult, repl_mode: bool) !void {
     if (result != .ok) {
         switch (result) {
             .runtime_error => |err| {
-                try stdout.writeAll("Interpreter error: ");
+                try stdout.writeAll("\x1b[33mRuntime error: \x1b[0m");
                 const msg = errToString(err);
                 try stdout.writeAll(msg);
                 try stdout.writeAll("\n");
