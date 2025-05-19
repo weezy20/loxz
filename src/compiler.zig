@@ -107,6 +107,15 @@ fn emitBytes(bytes: []const u8) !void {
         try emitByte(byte);
     }
 }
+const emit = struct {
+    fn byte(b: op) void {
+        emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
+    }
+    fn bytes(b: []const op) void {
+        emitBytes(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
+    }
+};
+
 /// Advance parser by one token, reporting a token error if found.
 fn advance() void {
     parser.previous = parser.current;
@@ -146,11 +155,20 @@ fn binary() void {
     // of + is parsed with the precedence of multiplication
     parsePrecedence(@enumFromInt(@intFromEnum(rule.precedence) + 1));
     // Finally we emit the bytecode for the operator
+
     switch (operator_tt) {
-        .Plus => emitByte(@intFromEnum(op.ADD)) catch @panic(BYTECODE_FAIL),
-        .Minus => emitByte(@intFromEnum(op.SUBTRACT)) catch @panic(BYTECODE_FAIL),
-        .Star => emitByte(@intFromEnum(op.MULTIPLY)) catch @panic(BYTECODE_FAIL),
-        .Slash => emitByte(@intFromEnum(op.DIVIDE)) catch @panic(BYTECODE_FAIL),
+        // Arithemtic infix expressions
+        .Plus => emit.byte(op.ADD),
+        .Minus => emit.byte(op.SUBTRACT),
+        .Star => emit.byte(op.MULTIPLY),
+        .Slash => emit.byte(op.DIVIDE),
+        // Logical infix expression
+        .BangEqual => emit.bytes(&.{ op.EQUAL, op.NOT }),
+        .EqualEqual => emit.byte(op.EQUAL),
+        .Greater => emit.byte(op.GREATER),
+        .GreaterEqual => emit.bytes(.{ op.LESS, op.NOT }),
+        .Less => emit.byte(op.LESS),
+        .LessEqual => emit.byte(.{ op.GREATER, op.NOT }),
         else => return, // Unreachable
     }
 }
@@ -352,19 +370,19 @@ const rules = [_]ParseRule{
     // TOKEN_BANG
     ParseRule{ .prefix = unary, .infix = null, .precedence = Precedence.None },
     // TOKEN_BANG_EQUAL
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_EQUAL
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_EQUAL_EQUAL
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_GREATER
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_GREATER_EQUAL
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_LESS
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_LESS_EQUAL
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_IDENTIFIER
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_STRING

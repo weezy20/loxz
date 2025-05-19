@@ -23,4 +23,5 @@ pub const RuntimeError = error{
     OutOfMemory,
     StackUnderflow,
     InvalidLogicalNot,
+    InvalidLogicalEquality,
 };

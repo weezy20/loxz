@@ -184,6 +184,14 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                     return RuntimeError.InvalidLogicalNot;
                 }
             },
+            .EQUAL => {
+                const b, const a = .{ try self.pop(), try self.pop() };
+                if (b.isBool()) |b_bool| if (a.isBool()) |a_bool| {
+                    try self.push(Value{ .Bool = a_bool == b_bool });
+                } else {
+                    return RuntimeError.InvalidLogicalEquality;
+                };
+            },
         }
     }
 }
