@@ -265,7 +265,7 @@ pub fn compile(
     bool,
     ?*DebugInfo,
     ?CompilerError,
-    ?std.mem.Allocator,
+    ?std.heap.ArenaAllocator,
 } {
     compilingChunk = chunk;
     if (opts) |o| {
@@ -294,14 +294,14 @@ pub fn compile(
             !parser.had_error,
             parser.debugInfo,
             err,
-            compiler_allocator,
+            arena,
         };
     };
     return .{
         !parser.had_error,
         parser.debugInfo,
         null,
-        compiler_allocator,
+        arena,
     };
 }
 /// `allocator` is only used in debug mode

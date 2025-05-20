@@ -181,6 +181,10 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
             d.deinit();
             allocator.destroy(d);
         }
+        // TODO: GC needs to handle this rather than us manually
+        if (compile_result[3]) |arena| if (!config.repl_mode) {
+            arena.deinit();
+        };
     }
     return lib.interpret(vm, &chunk, .{ .stack_tracing = config.stack_tracing, .debug_level = config.debug_level, .debugInfo = compile_result[1] });
 }

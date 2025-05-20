@@ -19,7 +19,7 @@ pub const Value = union(enum) {
             .String => try writer.print("String \"{s}\"", .{self.String}),
             .Bool => try writer.print("Boolean {s}", .{if (self.Bool) "true" else "false"}),
             .Nil => try writer.writeAll("Nil"),
-            .Obj => try writer.print("Object [...]", .{}),
+            .Obj => try self.Obj.format(writer),
         }
     }
     pub fn isNumber(value: *const Value) ?f64 {
@@ -31,6 +31,9 @@ pub const Value = union(enum) {
     pub fn isString(value: *const Value) ?[]const u8 {
         return switch (value.*) {
             .String => |str| str,
+            .Obj => |obj| {
+                return obj.asString();
+            },
             else => null,
         };
     }
@@ -43,7 +46,17 @@ pub const Value = union(enum) {
         };
     }
     pub inline fn isEqual(self: *const Value, other: *const Value) bool {
-        return std.meta.eql(self.*, other.*);
+        if (std.meta.eql(self.*, other.*)) return true;
+        // Handle string comparisons (both static and object strings)
+        const self_str = self.isString();
+        const other_str = other.isString();
+        if (self_str != null and other_str != null) {
+            return std.mem.eql(u8, self_str.?, other_str.?);
+        }
+        if (self.* == .Obj and other.* == .Obj) {
+            return self.Obj.isEqual(other.Obj);
+        }
+        return false;
     }
 };
 
