@@ -42,6 +42,12 @@ pub const Object = struct {
             // else => null,
         };
     }
+    pub fn objType(self: *const Object) ?[]const u8 {
+        return switch (self.data) {
+            .String => "string",
+            // else => null,
+        };
+    }
 
     pub fn deinit(self: *Object) void {
         switch (self.data) {
