@@ -4,7 +4,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    const config = cli.parseArgs(allocator) catch |err| {
+    var config = cli.parseArgs(allocator) catch |err| {
         std.debug.print("Error parsing CLI : {}\n", .{err});
         std.process.exit(128);
     };

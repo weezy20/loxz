@@ -5,3 +5,4 @@ pub usingnamespace @import("debug.zig");
 pub usingnamespace @import("vm.zig");
 pub usingnamespace @import("compiler.zig");
 pub usingnamespace @import("error.zig");
+pub usingnamespace @import("object.zig");

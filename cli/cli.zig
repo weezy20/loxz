@@ -5,7 +5,13 @@ const std = @import("std");
 const lib = @import("loxz");
 const VM = lib.VM;
 
-pub const Config = struct { debug: bool, debug_level: u8, stack_tracing: bool, file_path: ?[]const u8 };
+pub const Config = struct {
+    debug: bool,
+    debug_level: u8,
+    stack_tracing: bool,
+    file_path: ?[]const u8,
+    repl_mode: bool = undefined,
+};
 
 pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
@@ -73,7 +79,7 @@ fn validate_file(file: []const u8) !void {
     file_exists.close();
 }
 
-pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
+pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     try stdout.writeAll("\u{1F4BB} Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
@@ -88,7 +94,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     if (config.stack_tracing) {
         try stdout.writeAll("Stack tracing is enabled.\n");
     }
-
+    config.repl_mode = true;
     var buffer = try std.ArrayList(u8).initCapacity(allocator, 128);
     defer buffer.deinit();
     var line_buf: [2048]u8 = [_]u8{0} ** 2048;
@@ -136,7 +142,7 @@ pub fn repl(allocator: std.mem.Allocator, config: *const Config) !void {
     }
 }
 
-pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
+pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
     const file_path = config.file_path.?;
     const file = try std.fs.cwd().openFile(file_path, .{ .mode = .read_only });
     const file_size = if (file.stat()) |s| s.size else |_| blk: {
@@ -151,7 +157,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *const Config) !void {
 
     var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
-
+    config.repl_mode = false;
     const result = interpret(source, config, allocator, &vm) catch |err| {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
@@ -165,6 +171,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
     const compile_result = lib.compile(source, &chunk, allocator, .{
         .debug = config.debug,
         .debug_level = config.debug_level,
+        .repl_mode = config.repl_mode,
     });
     if (!compile_result[0]) {
         return .compile_error;

@@ -1,4 +1,7 @@
 var debug_level: u8 = 0;
+var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+const compiler_allocator = arena.allocator();
+
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
     // For first byte, the line is fetched as parser.previous.line, so we need this
@@ -13,6 +16,7 @@ var parser: Parser = Parser{
     .scanner = undefined,
     .debugInfo = null,
     .currentSpan = 0,
+    .repl_mode = true,
 };
 var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
@@ -27,6 +31,7 @@ const Parser = struct {
     debugInfo: ?*DebugInfo,
     /// For spans, we store the starting offset of the previous lexeme
     currentSpan: usize, // TODO: downgrade to u32
+    repl_mode: bool,
 
     fn reset(self: *Parser) void {
         self.previous = Token{
@@ -46,22 +51,6 @@ const Parser = struct {
 };
 pub fn resetParser() void {
     parser.reset();
-}
-fn previousSpanInfo() [2]usize {
-    if (debug_level > 2) {
-        std.debug.print("=== Previous span info === \n", .{});
-        std.debug.print("Previous lexeme:  >> {s} <<  (len {})\n", .{ parser.previous.lexeme, parser.previous.lexeme.len });
-        std.debug.print("Previous span: {} - {}\n", .{
-            parser.currentSpan - parser.previous.lexeme.len,
-            parser.currentSpan - 1,
-        });
-        std.debug.print("=== Previous span info === \n", .{});
-    }
-    // Returns the span for the previous token (exclusive of current)
-    return [2]usize{
-        parser.currentSpan - parser.previous.lexeme.len,
-        parser.currentSpan - 1,
-    };
 }
 /// Returns span info for the current token
 fn spanInfo() [2]usize {
@@ -124,6 +113,17 @@ fn advance() void {
         // Use ErrorAtCurrent since we're reporting the current token
         ErrorAtCurrent(null);
     }
+}
+/// Emit a string
+fn string() void {
+    const str = parser.previous.lexeme[1 .. parser.previous.lexeme.len - 1];
+    // We need to allocate the string on the heap
+    const value = if (parser.repl_mode) b: {
+        // In REPL mode, we need to allocate the string as the buffer will get deallocated
+        break :b Value{ .Obj = Object.newString(compiler_allocator, str) catch @panic(HEAP_FAIL) };
+    } else Value{ .String = str };
+    // Emit the string constant
+    emitConstant(value) catch @panic(BYTECODE_FAIL);
 }
 /// Emit a literal from "previous"
 fn literal() void {
@@ -218,7 +218,7 @@ fn ErrorAtCurrent(msg: ?[]const u8) void {
 }
 /// Report error at previous token
 fn Error(msg: ?[]const u8) void {
-    errorAt(&parser.previous, msg, previousSpanInfo()) catch {};
+    errorAt(&parser.previous, msg, null) catch {};
 }
 fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     parser.had_error = true;
@@ -256,11 +256,16 @@ pub fn compile(
     source: []const u8,
     chunk: *Chunk,
     allocator: std.mem.Allocator,
-    opts: ?struct { debug: bool, debug_level: ?u8 },
+    opts: ?struct {
+        debug: bool,
+        debug_level: ?u8,
+        repl_mode: bool,
+    },
 ) struct {
     bool,
     ?*DebugInfo,
     ?CompilerError,
+    ?std.mem.Allocator,
 } {
     compilingChunk = chunk;
     if (opts) |o| {
@@ -276,6 +281,7 @@ pub fn compile(
             parser.debugInfo = di_ptr;
         }
         if (o.debug_level) |lvl| debug_level = lvl;
+        parser.repl_mode = o.repl_mode;
     }
     parser.scanner = Scanner.init(source);
     advance();
@@ -284,9 +290,19 @@ pub fn compile(
     consume(TokenType.Eof, "Expect end of expression.");
 
     endCompiler(allocator) catch |err| {
-        return .{ !parser.had_error, parser.debugInfo, err };
+        return .{
+            !parser.had_error,
+            parser.debugInfo,
+            err,
+            compiler_allocator,
+        };
     };
-    return .{ !parser.had_error, parser.debugInfo, null };
+    return .{
+        !parser.had_error,
+        parser.debugInfo,
+        null,
+        compiler_allocator,
+    };
 }
 /// `allocator` is only used in debug mode
 inline fn endCompiler(allocator: std.mem.Allocator) !void {
@@ -305,7 +321,9 @@ const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
 const Value = @import("value.zig").Value;
+const Object = @import("object.zig").Object;
 const BYTECODE_FAIL = "fatal: failed to emit bytecode";
+const HEAP_FAIL = "fatal: failed to heap allocate";
 const CompilerError = @import("error.zig").CompilerError;
 
 /// Lowest to highest precedence
@@ -381,7 +399,7 @@ const rules = [_]ParseRule{
     // TOKEN_IDENTIFIER
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_STRING
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = string, .infix = null, .precedence = Precedence.None },
     // TOKEN_NUMBER
     ParseRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
     // TOKEN_AND

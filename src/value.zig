@@ -3,6 +3,7 @@ pub const Value = union(enum) {
     Number: f64,
     String: []const u8,
     Bool: bool,
+    Obj: *Object,
     Nil,
 
     pub fn format(
@@ -18,6 +19,7 @@ pub const Value = union(enum) {
             .String => try writer.print("String \"{s}\"", .{self.String}),
             .Bool => try writer.print("Boolean {s}", .{if (self.Bool) "true" else "false"}),
             .Nil => try writer.writeAll("Nil"),
+            .Obj => try writer.print("Object [...]", .{}),
         }
     }
     pub fn isNumber(value: *const Value) ?f64 {
@@ -40,17 +42,6 @@ pub const Value = union(enum) {
             else => null,
         };
     }
-    // pub fn isEqual(self: *const Value, other: *const Value) bool {
-    //     if (@intFromEnum(self.*) != @intFromEnum(other.*)) {
-    //         return false;
-    //     }
-    //     return switch (self.*) {
-    //         .Number => self.Number == other.Number,
-    //         .String => std.mem.eql(u8, self.String, other.String),
-    //         .Bool => self.Bool == other.Bool,
-    //         .Nil => true, // Nil == Nil is true
-    //     };
-    // }
     pub inline fn isEqual(self: *const Value, other: *const Value) bool {
         return std.meta.eql(self.*, other.*);
     }
@@ -102,3 +93,4 @@ pub const ValueArray = struct {
 
 const std = @import("std");
 const lib = @import("root.zig");
+const Object = lib.Object;
