@@ -15,7 +15,7 @@ pub const Object = struct {
 
         pub fn format(self: Data, writer: anytype) !void {
             switch (self) {
-                .String => |s| try writer.print("\"Object [string: {s}]\"", .{s.chars}),
+                .String => |s| try writer.print("Object string: [{s}]", .{s.chars}),
             }
         }
     };
