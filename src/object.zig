@@ -13,19 +13,45 @@ pub const Object = struct {
         // Instance: *Instance,
         // Array: *Array,
 
-        pub fn format(self: Data, writer: anytype) !void {
+        pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+            _ = fmt;
+            _ = options;
             switch (self) {
                 .String => |s| try writer.print("Object string: [{s}]", .{s.chars}),
             }
         }
     };
 
-    pub fn format(self: *const Object, writer: anytype) !void {
-        try self.data.format(writer);
+    pub fn format(self: *const Object, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        try self.data.format(fmt, options, writer);
     }
 
     pub fn newString(allocator: Allocator, chars: []const u8) !*Object {
         const obj_string = try ObjString.new(allocator, chars);
+        errdefer obj_string.deinit();
+
+        const obj = try allocator.create(Object);
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{ .String = obj_string },
+        };
+        return obj;
+    }
+    pub fn newConcatenatedString(allocator: Allocator, strings: []const []const u8) !*Object {
+        var total_length: usize = 0;
+        for (strings) |s| {
+            total_length += s.len;
+        }
+        const concatenated = try allocator.alloc(u8, total_length);
+        errdefer allocator.free(concatenated);
+
+        var offset: usize = 0;
+        for (strings) |s| {
+            std.mem.copyForwards(u8, concatenated[offset..], s);
+            offset += s.len;
+        }
+
+        const obj_string = try ObjString.new(allocator, concatenated);
         errdefer obj_string.deinit();
 
         const obj = try allocator.create(Object);

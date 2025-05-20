@@ -142,7 +142,18 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                     return RuntimeError.NaN;
                 }
             },
-            .ADD => {
+            .ADD => add: {
+                if (self.peek(0).isString()) |rhstr| if (self.peek(1).isString()) |lhstr| {
+                    _ = try self.pop();
+                    _ = try self.pop();
+                    const new_str = try Object.newConcatenatedString(
+                        self.allocator,
+                        &[_][]const u8{ lhstr, rhstr },
+                    );
+                    try self.push(Value{ .Obj = new_str });
+                    break :add;
+                };
+
                 const rhs = try self.popNumber();
                 const lhs = try self.popNumber();
                 try self.pushNumber(add(lhs, rhs));
@@ -202,6 +213,10 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
     }
 }
 
+fn peek(self: *VM, distance: usize) Value {
+    return self.stack[self.stackSize() - 1 - distance];
+}
+
 inline fn popNumber(self: *VM) RuntimeError!f64 {
     const value = try self.pop();
     if (value.isNumber()) |num| {
@@ -235,3 +250,4 @@ const Value = lib.Value;
 const DebugInfo = lib.DebugInfo;
 const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
+const Object = lib.Object;

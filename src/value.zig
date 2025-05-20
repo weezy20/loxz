@@ -19,7 +19,7 @@ pub const Value = union(enum) {
             .String => try writer.print("String \"{s}\"", .{self.String}),
             .Bool => try writer.print("Boolean {s}", .{if (self.Bool) "true" else "false"}),
             .Nil => try writer.writeAll("Nil"),
-            .Obj => try self.Obj.format(writer),
+            .Obj => try writer.print("{s}", .{self.Obj}),
         }
     }
     pub fn isNumber(value: *const Value) ?f64 {
