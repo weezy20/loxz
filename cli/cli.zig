@@ -122,10 +122,11 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
         } else {
             multi_line = false;
         }
-
-        // If we get here, the input is complete
-        try stdout.writeAll(buffer.items);
-        try stdout.writeAll("\n");
+        // REPL: "exit" command
+        if (std.mem.eql(u8, buffer.items, "exit")) {
+            try stdout.writeAll("Exiting REPL. Goodbye!\n");
+            return;
+        }
 
         const result = interpret(buffer.items, config, allocator, &vm) catch |err| {
             std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
