@@ -191,7 +191,7 @@ fn reportResult(result: InterpretResult, repl_mode: bool) !void {
         switch (result) {
             .runtime_error => |err| {
                 try stdout.writeAll("\x1b[33mRuntime error: \x1b[0m");
-                const msg = errToString(err);
+                const msg = lib.formatRuntimeError(err);
                 try stdout.writeAll(msg);
                 try stdout.writeAll("\n");
             },
@@ -206,15 +206,3 @@ fn reportResult(result: InterpretResult, repl_mode: bool) !void {
 }
 
 const InterpretResult = @import("loxz").InterpretResult;
-
-fn errToString(err: anyerror) []const u8 {
-    return switch (err) {
-        error.StackOverflow => "Stack overflow",
-        error.NaN => "Not a number (NaN)",
-        error.DivisionByZero => "Division by zero",
-        error.ValueIndexOutOfBounds => "index out of bounds of constant pool",
-        error.OutOfMemory => "Out of memory",
-        error.StackUnderflow => "Stack underflow",
-        else => "Unknown",
-    };
-}

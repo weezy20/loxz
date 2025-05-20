@@ -58,6 +58,22 @@ pub const Value = union(enum) {
         }
         return false;
     }
+    /// Compare value types not values. For values use `isEqual`.
+    pub fn isSameType(self: *const Value, other: *const Value) bool {
+        switch (.{ self.*, other.* }) {
+            // Both are numbers
+            .{ .Number, .Number } => return true,
+            // Both are strings
+            .{ .String, .String } => return true,
+            // Both are booleans
+            .{ .Bool, .Bool } => return true,
+            // Both are nil
+            .{ .Nil, .Nil } => return true,
+            // Both are objects
+            .{ .Obj, .Obj } => self.Obj.objType() == other.Obj.objType(),
+            else => return false,
+        }
+    }
 };
 
 /// Value Arrays

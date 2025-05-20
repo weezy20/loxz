@@ -152,11 +152,13 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
                     );
                     try self.push(Value{ .Obj = new_str });
                     break :add;
+                } else if (self.peek(0).isNumber()) |rhs| if (self.peek(1).isNumber()) |lhs| {
+                    _ = try self.pop();
+                    _ = try self.pop();
+                    try self.pushNumber(add(lhs, rhs));
+                    break :add;
                 };
-
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
-                try self.pushNumber(add(lhs, rhs));
+                return RuntimeError.CannotAddDifferentTypes;
             },
             .SUBTRACT => {
                 const rhs = try self.popNumber();

@@ -25,4 +25,19 @@ pub const RuntimeError = error{
     InvalidNot,
     InvalidEquality,
     InvalidComparison,
+    CannotAddDifferentTypes,
 };
+pub fn formatRuntimeError(err: RuntimeError) []const u8 {
+    return switch (err) {
+        RuntimeError.StackOverflow => "Stack overflow",
+        RuntimeError.NaN => "Not a number",
+        RuntimeError.DivisionByZero => "Division by zero",
+        RuntimeError.ValueIndexOutOfBounds => "Value index out of bounds",
+        RuntimeError.OutOfMemory => "Out of memory",
+        RuntimeError.StackUnderflow => "Stack underflow",
+        RuntimeError.InvalidNot => "Invalid operand for 'not'",
+        RuntimeError.InvalidEquality => "Invalid operands for equality",
+        RuntimeError.InvalidComparison => "Invalid operands for comparison",
+        RuntimeError.CannotAddDifferentTypes => "Cannot add different types",
+    };
+}
