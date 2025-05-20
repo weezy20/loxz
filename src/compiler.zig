@@ -1,6 +1,4 @@
 var debug_level: u8 = 0;
-var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-const compiler_allocator = arena.allocator();
 
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
@@ -17,6 +15,7 @@ var parser: Parser = Parser{
     .debugInfo = null,
     .currentSpan = 0,
     .repl_mode = true,
+    .allocator = undefined,
 };
 var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
@@ -32,6 +31,7 @@ const Parser = struct {
     /// For spans, we store the starting offset of the previous lexeme
     currentSpan: usize, // TODO: downgrade to u32
     repl_mode: bool,
+    allocator: std.mem.Allocator,
 
     fn reset(self: *Parser) void {
         self.previous = Token{
@@ -119,8 +119,8 @@ fn string() void {
     const str = parser.previous.lexeme[1 .. parser.previous.lexeme.len - 1];
     // We need to allocate the string on the heap
     const value = if (parser.repl_mode) b: {
-        // In REPL mode, we need to allocate the string as the buffer will get deallocated
-        break :b Value{ .Obj = Object.newString(compiler_allocator, str) catch @panic(HEAP_FAIL) };
+        // In REPL mode, we need to allocate the string as the line buffer will get deallocated
+        break :b Value{ .Obj = Object.newString(parser.allocator, str) catch @panic(HEAP_FAIL) };
     } else Value{ .String = str };
     // Emit the string constant
     emitConstant(value) catch @panic(BYTECODE_FAIL);
@@ -265,9 +265,9 @@ pub fn compile(
     bool,
     ?*DebugInfo,
     ?CompilerError,
-    ?std.heap.ArenaAllocator,
 } {
     compilingChunk = chunk;
+    parser.allocator = allocator;
     if (opts) |o| {
         if (o.debug) {
             // Allocate DebugInfo on the heap
@@ -294,14 +294,12 @@ pub fn compile(
             !parser.had_error,
             parser.debugInfo,
             err,
-            arena,
         };
     };
     return .{
         !parser.had_error,
         parser.debugInfo,
         null,
-        arena,
     };
 }
 /// `allocator` is only used in debug mode
