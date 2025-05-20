@@ -17,7 +17,7 @@ pub const Object = struct {
             _ = fmt;
             _ = options;
             switch (self) {
-                .String => |s| try writer.print("Object string: [{s}]", .{s.chars}),
+                .String => |s| try writer.print("Object string: [\"{s}\"]", .{s.chars}),
             }
         }
     };

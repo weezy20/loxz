@@ -124,7 +124,7 @@ fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
         switch (instruction) {
             .RETURN => {
                 const val = try self.pop();
-                std.debug.print("Return Value: {s}\n", .{val});
+                std.debug.print("{s}\n", .{val});
                 return;
             },
             .CONSTANT, .CONSTANT_LONG => {
