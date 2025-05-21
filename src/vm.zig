@@ -1,6 +1,6 @@
 const STACK_MAX = 512;
 pub const VM = @This();
-
+var global_debug_level: u8 = 0;
 /// Chunk to execute
 chunk: *Chunk,
 /// Bytecode instruction pointer
@@ -13,6 +13,8 @@ allocator: std.mem.Allocator,
 stack: *[STACK_MAX]Value,
 /// Stack pointer - points just past the last used element
 stackTop: [*]Value,
+/// Allocated objects (redundant if using Arena allocator)
+objects: ?*Object = null,
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
@@ -50,6 +52,14 @@ fn push(self: *VM, value: Value) RuntimeError!void {
     }
     self.stackTop[0] = value;
     self.stackTop += 1;
+    // Since values are pushed onto the stack using this method, it's a good place to update
+    // our object list
+    if (value.isObject()) |obj| {
+        if (global_debug_level > 0)
+            std.debug.print("Pushing object {s} to VM\n", .{obj.*});
+        obj.next = self.objects;
+        self.objects = obj;
+    }
 }
 
 fn pop(self: *VM) RuntimeError!Value {
@@ -61,7 +71,27 @@ fn pop(self: *VM) RuntimeError!Value {
 }
 
 pub fn deinitVM(self: *VM) void {
-    _ = self.allocator.destroy(self.stack);
+    if (global_debug_level > 0)
+        std.debug.print("Running destructor on VM\n", .{});
+
+    // Print all objects following the next pointer
+    if (self.objects) |obj| {
+        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
+        var current: *Object = obj;
+        var idx: usize = 0;
+        while (true) {
+            if (global_debug_level > 0) std.debug.print("  Object {} at {p}\n", .{ idx, current });
+            const next = current.next;
+            current.deinit();
+            if (next) |next_obj| {
+                current = next_obj;
+                idx += 1;
+            } else {
+                break;
+            }
+        }
+    }
+    self.allocator.destroy(self.stack);
     // TODO: Check if this is the right place to free DebugInfo
     // if (self.debugInfo) |d| {
     //     self.allocator.destroy(d);
@@ -69,13 +99,14 @@ pub fn deinitVM(self: *VM) void {
 }
 
 pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false, debug_level: u8, debugInfo: ?*DebugInfo = null }) InterpretResult {
+    global_debug_level = opts.debug_level;
     self.chunk = chunk;
     self.ip = &chunk.code[0];
     if (opts.debugInfo) |d| {
         self.debugInfo = d;
     }
     // Enable stack-tracing here
-    if (self.run(opts.stack_tracing, opts.debug_level)) {
+    if (self.run(opts.stack_tracing)) {
         return .ok;
     } else |err| {
         return .{ .runtime_error = err };
@@ -98,11 +129,11 @@ inline fn readConstant(self: *VM, long: bool) usize {
     }
 }
 
-fn run(self: *VM, stack_tracing: bool, debug_level: u8) RuntimeError!void {
+fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
     var debug_offset: usize = 0;
     while (debug_offset < self.chunk.count) {
         if (stack_tracing) self.printStack();
-        if (debug_level > 0) {
+        if (global_debug_level > 0) {
             if (self.debugInfo) |d| blk: {
                 if (debug_offset >= self.chunk.count) break :blk;
                 debug_offset = lib.disassembleInstruction(

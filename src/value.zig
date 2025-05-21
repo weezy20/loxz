@@ -74,6 +74,12 @@ pub const Value = union(enum) {
             else => return false,
         }
     }
+    pub fn isObject(self: *const Value) ?*Object {
+        if (self.* == .Obj) {
+            return self.Obj;
+        }
+        return null;
+    }
 };
 
 /// Value Arrays

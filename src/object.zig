@@ -5,6 +5,7 @@ const Allocator = std.mem.Allocator;
 pub const Object = struct {
     data: Data,
     allocator: Allocator,
+    next: ?*Object = null,
 
     const Data = union(enum) {
         String: *ObjString,
@@ -42,16 +43,17 @@ pub const Object = struct {
         for (strings) |s| {
             total_length += s.len;
         }
-        const concatenated = try allocator.alloc(u8, total_length);
-        errdefer allocator.free(concatenated);
+        const buf = try allocator.alloc(u8, total_length);
+        errdefer allocator.free(buf);
 
         var offset: usize = 0;
         for (strings) |s| {
-            std.mem.copyForwards(u8, concatenated[offset..], s);
+            std.mem.copyForwards(u8, buf[offset..], s);
             offset += s.len;
         }
 
-        const obj_string = try ObjString.new(allocator, concatenated);
+        const obj_string = try ObjString.new(allocator, buf);
+        allocator.free(buf);
         errdefer obj_string.deinit();
 
         const obj = try allocator.create(Object);
