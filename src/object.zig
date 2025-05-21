@@ -51,8 +51,7 @@ pub const Object = struct {
             std.mem.copyForwards(u8, buf[offset..], s);
             offset += s.len;
         }
-
-        const obj_string = try ObjString.new(allocator, buf);
+        var obj_string = try ObjString.new(allocator, buf);
         errdefer obj_string.deinit();
 
         const obj = try allocator.create(Object);
@@ -107,6 +106,8 @@ pub const ObjString = struct {
 
     pub fn new(allocator: Allocator, init: []const u8) !*ObjString {
         const self = try allocator.create(ObjString);
+        errdefer self.allocator.destroy(self);
+        errdefer self.allocator.free(self.chars);
         self.* = .{
             .allocator = allocator,
             .chars = try allocator.dupe(u8, init),
