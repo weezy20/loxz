@@ -44,7 +44,7 @@ pub const Object = struct {
             total_length += s.len;
         }
         const buf = try allocator.alloc(u8, total_length);
-        errdefer allocator.free(buf);
+        defer allocator.free(buf);
 
         var offset: usize = 0;
         for (strings) |s| {
@@ -53,7 +53,6 @@ pub const Object = struct {
         }
 
         const obj_string = try ObjString.new(allocator, buf);
-        allocator.free(buf);
         errdefer obj_string.deinit();
 
         const obj = try allocator.create(Object);
