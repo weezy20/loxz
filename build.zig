@@ -103,7 +103,11 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const test_mod = b.createModule(.{ .target = target, .optimize = optimize, .root_source_file = b.path("src/tests.zig") });
+    const test_mod = b.createModule(.{
+        .target = target,
+        .optimize = optimize,
+        .root_source_file = b.path("src/tests.zig"),
+    });
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.

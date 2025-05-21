@@ -8,7 +8,7 @@ pub const Object = struct {
     next: ?*Object = null,
 
     const Data = union(enum) {
-        String: *ObjString,
+        String: ObjString,
         // Function: *Function,
         // Class: *Class,
         // Instance: *Instance,
@@ -28,16 +28,23 @@ pub const Object = struct {
     }
 
     pub fn newString(allocator: Allocator, chars: []const u8) !*Object {
-        const obj_string = try ObjString.new(allocator, chars);
-        errdefer obj_string.deinit();
-
         const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        const string_chars = try allocator.dupe(u8, chars);
+        errdefer allocator.free(string_chars);
+
         obj.* = .{
             .allocator = allocator,
-            .data = .{ .String = obj_string },
+            .data = .{
+                .String = .{
+                    .chars = string_chars,
+                },
+            },
         };
         return obj;
     }
+
     pub fn newConcatenatedString(allocator: Allocator, strings: []const []const u8) !*Object {
         var total_length: usize = 0;
         for (strings) |s| {
@@ -51,13 +58,20 @@ pub const Object = struct {
             std.mem.copyForwards(u8, buf[offset..], s);
             offset += s.len;
         }
-        var obj_string = try ObjString.new(allocator, buf);
-        errdefer obj_string.deinit();
 
         const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        const string_chars = try allocator.dupe(u8, buf);
+        errdefer allocator.free(string_chars);
+
         obj.* = .{
             .allocator = allocator,
-            .data = .{ .String = obj_string },
+            .data = .{
+                .String = .{
+                    .chars = string_chars,
+                },
+            },
         };
         return obj;
     }
@@ -68,6 +82,7 @@ pub const Object = struct {
             // else => null,
         };
     }
+
     pub fn objType(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => "string",
@@ -77,10 +92,13 @@ pub const Object = struct {
 
     pub fn deinit(self: *Object) void {
         switch (self.data) {
-            .String => |s| s.deinit(),
+            .String => |s| {
+                self.allocator.free(s.chars);
+            },
         }
         self.allocator.destroy(self);
     }
+
     pub fn isEqual(self: *const Object, other: *const Object) bool {
         // Fast path for same object
         if (self == other) return true;
@@ -100,22 +118,13 @@ pub const Object = struct {
         }
     }
 };
+
 pub const ObjString = struct {
     chars: []const u8,
-    allocator: Allocator,
-
-    pub fn new(allocator: Allocator, init: []const u8) !*ObjString {
-        const self = try allocator.create(ObjString);
-        errdefer self.allocator.destroy(self);
-        self.* = .{
-            .allocator = allocator,
-            .chars = try allocator.dupe(u8, init),
-        };
-        return self;
-    }
-
-    pub fn deinit(self: *ObjString) void {
-        self.allocator.free(self.chars);
-        self.allocator.destroy(self);
-    }
 };
+
+test "Object" {
+    const t = std.testing;
+    try t.expect(@sizeOf(Object) == 40);
+    try t.expect(@sizeOf(ObjString) == 16);
+}

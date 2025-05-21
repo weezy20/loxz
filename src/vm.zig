@@ -80,7 +80,7 @@ pub fn deinitVM(self: *VM) void {
         var current: *Object = obj;
         var idx: usize = 0;
         while (true) {
-            if (global_debug_level > 0) std.debug.print("  Object {} at {p}\n", .{ idx, current });
+            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current });
             const next = current.next;
             current.deinit();
             if (next) |next_obj| {
