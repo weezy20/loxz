@@ -107,7 +107,6 @@ pub const ObjString = struct {
     pub fn new(allocator: Allocator, init: []const u8) !*ObjString {
         const self = try allocator.create(ObjString);
         errdefer self.allocator.destroy(self);
-        errdefer self.allocator.free(self.chars);
         self.* = .{
             .allocator = allocator,
             .chars = try allocator.dupe(u8, init),
