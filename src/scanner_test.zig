@@ -198,14 +198,14 @@ test "scanner: line counting" {
     var scanner = Scanner.init(source);
 
     const token1 = scanner.scanToken();
-    try t.expectEqual(@as(u32, 0), token1.line);
+    try t.expectEqual(@as(u32, 1), token1.line);
 
     const token2 = scanner.scanToken();
-    try t.expectEqual(@as(u32, 1), token2.line);
+    try t.expectEqual(@as(u32, 2), token2.line);
 
     const token3 = scanner.scanToken();
-    try t.expectEqual(@as(u32, 2), token3.line);
+    try t.expectEqual(@as(u32, 3), token3.line);
 
     const eof = scanner.scanToken();
-    try t.expectEqual(@as(u32, 2), eof.line);
+    try t.expectEqual(@as(u32, 3), eof.line);
 }
