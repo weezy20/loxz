@@ -30,7 +30,7 @@ COPY build.zig.zon .
 
 # Build the release binary with required CPU features
 RUN zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl \
-    -Dcflags="-march=haswell -msse4.2 -mpclmul -funroll-loops -std=c99"
+    -Dcpu=native
 
 # --- Runtime stage ---
 FROM alpine:latest
