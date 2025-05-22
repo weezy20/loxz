@@ -106,7 +106,7 @@ pub const Object = struct {
         switch (self.data) {
             .String => |s1| {
                 const s2 = other.data.String;
-                return std.mem.eql(u8, s1.chars, s2.chars);
+                return ObjString.eql(s1, s2);
             },
             // else => return false,
         }
@@ -116,6 +116,10 @@ pub const Object = struct {
 pub const ObjString = struct {
     chars: []align(8) const u8,
     hash: u64,
+
+    pub fn eql(a: ObjString, b: ObjString) bool {
+        return a.hash == b.hash and std.mem.eql(u8, a.chars, b.chars);
+    }
 
     pub fn init(allocator: Allocator, from: []const u8) !ObjString {
         // const string_chars = try allocator.dupe(u8, chars);

@@ -1,8 +1,8 @@
-const TABLE_MAX_LOAD = 0.75;
+const TABLE_MAX_LOAD = 0.75; // 3 / 4 in integer
 
 pub const Entry = struct {
-    key: ObjString,
-    value: Value,
+    key: ?ObjString,
+    value: ?Value,
 };
 pub const Table = struct {
     allocator: std.mem.Allocator,
@@ -25,8 +25,8 @@ pub const Table = struct {
         self.* = undefined;
     }
     pub fn set(table: *Table, key: *ObjString, value: Value) !bool {
-        // Grow the array at 75% capacity
-        if (table.count + 1 > table.capacity * TABLE_MAX_LOAD) {
+        // Grow the array at 75% capacity, can't multiply float with int hence..
+        if (table.count + 1 > table.capacity * 3 / 4) {
             const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
 
             if (table.capacity == 0)
@@ -37,16 +37,24 @@ pub const Table = struct {
                 table.allocator.free(table.entries[0..table.capacity]);
                 table.entries = new_entries.ptr;
             }
+            @memset(table.entries[0..new_capacity], .{ .key = null, .value = null });
             table.capacity = new_capacity;
         }
-
-        // Add the new entry
-        table.entries[table.count] = .{
-            .key = key.*,
-            .value = value,
-        };
+        var entry_ptr: *Entry = table.findEntry(key);
+        entry_ptr.key = key.*;
+        entry_ptr.value = value;
+        //TODO
         table.count += 1;
         return true;
+    }
+    /// Return pointer to Entry which either contains the same key (overwrite) or empty key (empty slot)
+    fn findEntry(table: *const Table, key: *ObjString) *Entry {
+        var idx = key.hash % table.capacity;
+        while (true) : (idx = @mod(idx + 1, table.capacity)) {
+            const e = &table.entries[idx];
+            if (e.key) |found| if (ObjString.eql(found, key.*)) return e;
+            if (e.key == null) return e;
+        }
     }
 };
 test "Table" {
@@ -59,11 +67,10 @@ test "Table" {
     const result = try table.set(&key, Value{ .Number = 42 });
     try testing.expect(result);
     try std.testing.expect(table.count == 1);
-    try std.testing.expect(table.capacity >= 16);
-    // try table.grow(10);
-    // try table.put("key", Value{});
-    // const value = try table.get("key");
-    // std.debug.assert(table.entries == null);
+    try std.testing.expect(table.capacity == 8);
+    // Check if the value was set
+    const found_entry = table.findEntry(&key);
+    try testing.expect(found_entry.value.?.Number == 42);
 }
 
 /// FNV-1a hash function
