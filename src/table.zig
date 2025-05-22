@@ -1,3 +1,5 @@
+const TABLE_MAX_LOAD = 0.75;
+
 pub const Entry = struct {
     key: ObjString,
     value: Value,
@@ -23,8 +25,9 @@ pub const Table = struct {
         self.* = undefined;
     }
     pub fn set(table: *Table, key: *ObjString, value: Value) !bool {
-        if (table.count + 1 > table.capacity) {
-            const new_capacity = if (table.capacity == 0) 16 else table.capacity * 3 / 2;
+        // Grow the array at 75% capacity
+        if (table.count + 1 > table.capacity * TABLE_MAX_LOAD) {
+            const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
 
             if (table.capacity == 0)
                 table.entries = (try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity)).ptr
