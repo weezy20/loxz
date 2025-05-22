@@ -28,11 +28,10 @@ pub const Object = struct {
     }
 
     pub fn newString(allocator: Allocator, chars: []const u8) !*Object {
-        const obj = try allocator.create(Object);
-        errdefer allocator.destroy(obj);
+        var obj_string = try ObjString.init(allocator, chars);
+        errdefer obj_string.deinit(allocator);
 
-        const obj_string = try ObjString.init(allocator, chars);
-        errdefer allocator.free(obj_string.chars);
+        const obj = try allocator.create(Object);
 
         obj.* = .{
             .allocator = allocator,
@@ -57,11 +56,10 @@ pub const Object = struct {
             offset += s.len;
         }
 
-        const obj = try allocator.create(Object);
-        errdefer allocator.destroy(obj);
+        var obj_string = try ObjString.init(allocator, buf);
+        errdefer obj_string.deinit(allocator);
 
-        const obj_string = try ObjString.init(allocator, buf);
-        errdefer allocator.free(obj_string.chars);
+        const obj = try allocator.create(Object);
 
         obj.* = .{
             .allocator = allocator,
@@ -89,7 +87,7 @@ pub const Object = struct {
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
-                self.allocator.free(s.chars);
+                @constCast(&s).deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -116,7 +114,7 @@ pub const Object = struct {
 };
 
 pub const ObjString = struct {
-    chars: []const u8,
+    chars: []align(8) const u8,
     hash: u64,
 
     pub fn init(allocator: Allocator, from: []const u8) !ObjString {
@@ -128,6 +126,11 @@ pub const ObjString = struct {
             .chars = obj_str_chars,
             .hash = clHash(obj_str_chars),
         };
+    }
+    /// Deallocate the backing array
+    pub fn deinit(self: *ObjString, allocator: Allocator) void {
+        allocator.free(self.chars);
+        self.*.hash = undefined;
     }
 };
 
