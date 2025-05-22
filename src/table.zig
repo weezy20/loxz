@@ -1,17 +1,53 @@
+pub const Entry = struct {
+    key: Object.ObjString,
+    value: Value,
+};
 pub const Table = struct {
-    allocator: *std.mem.Allocator,
+    allocator: std.mem.Allocator,
     count: usize,
     capacity: usize,
-    entries: []Entry,
-};
-pub const Entry = struct { key: []const u8, value: []const u8 };
+    entries: [*]Entry,
 
-pub fn fastHash(key: []const u8) u64 {
-    const random = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?;
-    return clhash.clhash(random, key.ptr, key.len);
+    pub fn init(allocator: std.mem.Allocator) Table {
+        return Table{
+            .allocator = allocator,
+            .count = 0,
+            .capacity = 0,
+            .entries = undefined,
+        };
+    }
+    pub fn deinit(self: *Table) void {
+        if (self.capacity > 0) {
+            self.allocator.free(self.entries[0..self.capacity]);
+        }
+        self.* = undefined;
+    }
+};
+test "Table" {
+    const allocator = std.testing.allocator;
+    var table = Table.init(allocator);
+    defer table.deinit();
+    // try table.grow(10);
+    // try table.put("key", Value{});
+    // const value = try table.get("key");
+    // std.debug.assert(table.entries == null);
 }
+
+/// Note: pointer must be 8 byte aligned
+pub fn clHash(key: []const u8) u64 {
+    return clhash.clhash(RANDOM, key.ptr, key.len);
+}
+pub fn initClHashRandomKey() void {
+    if (RANDOM == null) {
+        RANDOM = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?;
+    }
+}
+
+var RANDOM: ?*anyopaque = null;
 
 const std = @import("std");
 const clhash = @cImport({
     @cInclude("clhash.h");
 });
+const Object = @import("object.zig");
+const Value = @import("value.zig");

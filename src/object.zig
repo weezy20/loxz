@@ -31,15 +31,13 @@ pub const Object = struct {
         const obj = try allocator.create(Object);
         errdefer allocator.destroy(obj);
 
-        const string_chars = try allocator.dupe(u8, chars);
-        errdefer allocator.free(string_chars);
+        const obj_string = try ObjString.init(allocator, chars);
+        errdefer allocator.free(obj_string.chars);
 
         obj.* = .{
             .allocator = allocator,
             .data = .{
-                .String = .{
-                    .chars = string_chars,
-                },
+                .String = obj_string,
             },
         };
         return obj;
@@ -62,15 +60,13 @@ pub const Object = struct {
         const obj = try allocator.create(Object);
         errdefer allocator.destroy(obj);
 
-        const string_chars = try allocator.dupe(u8, buf);
-        errdefer allocator.free(string_chars);
+        const obj_string = try ObjString.init(allocator, buf);
+        errdefer allocator.free(obj_string.chars);
 
         obj.* = .{
             .allocator = allocator,
             .data = .{
-                .String = .{
-                    .chars = string_chars,
-                },
+                .String = obj_string,
             },
         };
         return obj;
@@ -121,10 +117,24 @@ pub const Object = struct {
 
 pub const ObjString = struct {
     chars: []const u8,
+    hash: u64,
+
+    pub fn init(allocator: Allocator, from: []const u8) !ObjString {
+        // const string_chars = try allocator.dupe(u8, chars);
+        // u8 alignment is required for clhash
+        const obj_str_chars = try allocator.alignedAlloc(u8, 8, from.len);
+        @memcpy(obj_str_chars, from);
+        return ObjString{
+            .chars = obj_str_chars,
+            .hash = clHash(obj_str_chars),
+        };
+    }
 };
 
 test "Object" {
     const t = std.testing;
-    try t.expect(@sizeOf(Object) == 40);
-    try t.expect(@sizeOf(ObjString) == 16);
+    try t.expect(@sizeOf(Object) == 48);
+    try t.expect(@sizeOf(ObjString) == 24);
 }
+
+const clHash = @import("table.zig").clHash;
