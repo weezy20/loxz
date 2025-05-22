@@ -27,9 +27,6 @@ pub fn build(b: *std.Build) void {
         },
     });
 
-    // Install the library
-    b.installArtifact(clhash);
-
     const lib_mod = b.createModule(.{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
