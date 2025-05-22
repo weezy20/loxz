@@ -35,8 +35,8 @@ test "Table" {
 /// FNV-1a hash function
 pub fn loxHash(key: []const u8) u64 {
     var hash: u64 = 2166136261;
-    for (0..key.len) |char| {
-        hash ^= key[char];
+    for (key) |char| {
+        hash ^= char;
         hash *= 16777619;
     }
     return hash;
