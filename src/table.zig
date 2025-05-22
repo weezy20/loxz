@@ -32,15 +32,24 @@ test "Table" {
     // const value = try table.get("key");
     // std.debug.assert(table.entries == null);
 }
-
+/// FNV-1a hash function
+pub fn loxHash(key: []const u8) u64 {
+    var hash: u64 = 2166136261;
+    for (0..key.len) |char| {
+        hash ^= key[char];
+        hash *= 16777619;
+    }
+    return hash;
+}
 /// Note: pointer must be 8 byte aligned
 pub fn clHash(key: []const u8) u64 {
     return clhash.clhash(RANDOM, key.ptr, key.len);
 }
 pub fn initClHashRandomKey() void {
-    if (RANDOM == null) {
-        RANDOM = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?;
-    }
+    if (RANDOM == null)
+        RANDOM = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?
+    else
+        @panic("Not allowed");
 }
 
 var RANDOM: ?*anyopaque = null;
