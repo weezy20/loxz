@@ -234,17 +234,21 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     switch (token.tokenType) {
         .Eof => try stderr.writeAll(" (at end)"),
         .Error => {
-            try stderr.writeAll(" at \"");
+            try stderr.writeAll(" at '");
+            try stderr.writeAll("\x1b[1m");
             try stderr.writeAll(token.lexeme);
-            try stderr.writeAll("\"");
+            try stderr.writeAll("\x1b[0m");
+            try stderr.writeAll("'");
             if (span) |s| if (debug_level > 0) {
                 try stderr.print(" [lex {}..{}]", .{ s[0], s[1] - 1 });
             };
         },
         else => {
-            try stderr.writeAll(" (at \"");
+            try stderr.writeAll(" (at '");
+            try stderr.writeAll("\x1b[1m");
             try stderr.writeAll(token.lexeme);
-            try stderr.writeAll("\")");
+            try stderr.writeAll("\x1b[0m");
+            try stderr.writeAll("')");
             if (span) |s| if (debug_level > 0) {
                 try stderr.print(" [lex {d}..{d}]", .{ s[0], s[1] });
             };

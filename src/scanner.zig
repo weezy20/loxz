@@ -8,7 +8,7 @@ line: u32,
 source: []const u8,
 
 pub fn init(source: []const u8) Scanner {
-    return Scanner{ .source = source, .start = 0, .current = 0, .line = 0 };
+    return Scanner{ .source = source, .start = 0, .current = 0, .line = 1 };
 }
 inline fn makeToken(sc: *const Scanner, @"type": TokenType) Token {
     return Token{

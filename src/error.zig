@@ -38,6 +38,6 @@ pub fn formatRuntimeError(err: RuntimeError) []const u8 {
         RuntimeError.InvalidNot => "Invalid operand for 'not'",
         RuntimeError.InvalidEquality => "Invalid operands for equality",
         RuntimeError.InvalidComparison => "Invalid operands for comparison",
-        RuntimeError.CannotAddDifferentTypes => "Cannot add different types",
+        RuntimeError.CannotAddDifferentTypes => "Operands of different types cannot be added",
     };
 }
