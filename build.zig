@@ -88,7 +88,10 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .root_source_file = b.path("src/tests.zig"),
+        .link_libc = true,
     });
+    test_mod.linkLibrary(clhash);
+    test_mod.addIncludePath(b.path("src/clhash/include"));
 
     // Creates a step for unit testing. This only builds the test executable
     // but does not run it.

@@ -1,5 +1,5 @@
 pub const Entry = struct {
-    key: Object.ObjString,
+    key: ObjString,
     value: Value,
 };
 pub const Table = struct {
@@ -22,11 +22,41 @@ pub const Table = struct {
         }
         self.* = undefined;
     }
+    pub fn set(table: *Table, key: *ObjString, value: Value) !bool {
+        if (table.count + 1 > table.capacity) {
+            const new_capacity = if (table.capacity == 0) 16 else table.capacity * 3 / 2;
+
+            if (table.capacity == 0)
+                table.entries = (try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity)).ptr
+            else {
+                const new_entries = try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity);
+                @memcpy(new_entries[0..table.count], table.entries[0..table.count]);
+                table.allocator.free(table.entries[0..table.capacity]);
+                table.entries = new_entries.ptr;
+            }
+            table.capacity = new_capacity;
+        }
+
+        // Add the new entry
+        table.entries[table.count] = .{
+            .key = key.*,
+            .value = value,
+        };
+        table.count += 1;
+        return true;
+    }
 };
 test "Table" {
-    const allocator = std.testing.allocator;
+    initClHashRandomKey();
+    const allocator = testing.allocator;
     var table = Table.init(allocator);
     defer table.deinit();
+    var key = try ObjString.init(allocator, "Hello");
+    defer key.deinit(allocator);
+    const result = try table.set(&key, Value{ .Number = 42 });
+    try testing.expect(result);
+    try std.testing.expect(table.count == 1);
+    try std.testing.expect(table.capacity >= 16);
     // try table.grow(10);
     // try table.put("key", Value{});
     // const value = try table.get("key");
@@ -55,8 +85,10 @@ pub fn initClHashRandomKey() void {
 var RANDOM: ?*anyopaque = null;
 
 const std = @import("std");
+const testing = std.testing;
 const clhash = @cImport({
     @cInclude("clhash.h");
 });
-const Object = @import("object.zig");
-const Value = @import("value.zig");
+const Object = @import("object.zig").Object;
+const ObjString = @import("object.zig").ObjString;
+const Value = @import("value.zig").Value;
