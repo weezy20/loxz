@@ -15,9 +15,9 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
 
-    clhash.addIncludePath(b.path("clhash/include"));
+    clhash.addIncludePath(b.path("src/clhash/include"));
     clhash.addCSourceFile(.{
-        .file = b.path("clhash/src/clhash.c"),
+        .file = b.path("src/clhash/src/clhash.c"),
         .flags = &.{
             "-std=c99",
             "-msse4.2",
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     lib_mod.linkLibrary(clhash);
-    lib_mod.addIncludePath(b.path("clhash/include"));
+    lib_mod.addIncludePath(b.path("src/clhash/include"));
 
     const exe_mod = b.createModule(.{
         .root_source_file = b.path("main.zig"),

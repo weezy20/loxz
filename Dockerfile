@@ -28,9 +28,9 @@ COPY main.zig .
 COPY build.zig .
 COPY build.zig.zon .
 
-# Build the release binary
-# Using -Dtarget=native-native-musl for proper static linking
-RUN zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl
+# Build the release binary with required CPU features
+RUN zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl \
+    -Dcflags="-march=haswell -msse4.2 -mpclmul -funroll-loops -std=c99"
 
 # --- Runtime stage ---
 FROM alpine:latest
