@@ -73,6 +73,10 @@ pub fn loxHash(key: []const u8) u64 {
     }
     return hash;
 }
+test "loxHash" {
+    const expected_hash = 10461433681597188260;
+    try testing.expect(expected_hash == loxHash("Zig is amazing"));
+}
 /// Note: pointer must be 8 byte aligned
 pub fn clHash(key: []const u8) u64 {
     return clhash.clhash(RANDOM, key.ptr, key.len);
