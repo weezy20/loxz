@@ -1,3 +1,3 @@
-[submodule "clhash"]
-	path = clhash
-	url = https://github.com/simdhash/clhash
+[submodule "src/clhash"]
+	path = src/clhash
+	url = https://github.com/simdhash/clhash.git
