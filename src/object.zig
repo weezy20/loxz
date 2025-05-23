@@ -118,8 +118,9 @@ pub const ObjString = struct {
     hash: u64,
 
     pub fn eql(a: ObjString, b: ObjString) bool {
-        // Since lox ObjStrings are immutable, we can rely on the hashcode for equality
-        return a.hash == b.hash;
+        // On the rare chance that two strings are different but have the same hash,
+        // At least we can shortcircuit the comparison using the hashcode check first
+        return a.hash == b.hash and std.mem.eql(u8, a.chars, b.chars);
     }
 
     pub fn init(allocator: Allocator, from: []const u8) !ObjString {
