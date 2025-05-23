@@ -177,7 +177,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 if (self.peek(0).isString()) |rhstr| if (self.peek(1).isString()) |lhstr| {
                     _ = try self.pop();
                     _ = try self.pop();
-                    const new_str = try Object.newConcatenatedString(
+                    const new_str = try Object.newString(
                         self.allocator,
                         &[_][]const u8{ lhstr, rhstr },
                     );

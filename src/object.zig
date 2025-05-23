@@ -27,36 +27,27 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, chars: []const u8) !*Object {
-        var obj_string = try ObjString.init(allocator, chars);
-        errdefer obj_string.deinit(allocator);
+    pub fn newString(allocator: Allocator, strings: []const []const u8) !*Object {
+        var obj_string: ObjString = undefined;
 
-        const obj = try allocator.create(Object);
+        if (strings.len == 1) {
+            obj_string = try ObjString.init(allocator, strings[0]);
+        } else {
+            var total_length: usize = 0;
+            for (strings) |s| {
+                total_length += s.len;
+            }
+            var buf = try allocator.alloc(u8, total_length);
+            defer allocator.free(buf);
 
-        obj.* = .{
-            .allocator = allocator,
-            .data = .{
-                .String = obj_string,
-            },
-        };
-        return obj;
-    }
-
-    pub fn newConcatenatedString(allocator: Allocator, strings: []const []const u8) !*Object {
-        var total_length: usize = 0;
-        for (strings) |s| {
-            total_length += s.len;
-        }
-        const buf = try allocator.alloc(u8, total_length);
-        defer allocator.free(buf);
-
-        var offset: usize = 0;
-        for (strings) |s| {
-            std.mem.copyForwards(u8, buf[offset..], s);
-            offset += s.len;
+            var offset: usize = 0;
+            for (strings) |s| {
+                std.mem.copyForwards(u8, buf[offset..], s);
+                offset += s.len;
+            }
+            obj_string = try ObjString.init(allocator, buf);
         }
 
-        var obj_string = try ObjString.init(allocator, buf);
         errdefer obj_string.deinit(allocator);
 
         const obj = try allocator.create(Object);
