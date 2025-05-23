@@ -129,7 +129,7 @@ pub const ObjString = struct {
         @memcpy(obj_str_chars, from);
         return ObjString{
             .chars = obj_str_chars,
-            .hash = clHash(obj_str_chars),
+            .hash = hasher(obj_str_chars),
         };
     }
     /// Deallocate the backing array
@@ -145,4 +145,5 @@ test "Object" {
     try t.expect(@sizeOf(ObjString) == 24);
 }
 
-const clHash = @import("table.zig").clHash;
+const hasher = @import("table.zig").loxHash;
+// const hasher = @import("table.zig").clHash;

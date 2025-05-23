@@ -27,38 +27,50 @@ pub const Table = struct {
     pub fn set(table: *Table, key: *ObjString, value: Value) !bool {
         // Grow the array at 75% capacity, can't multiply float with int hence..
         if (table.count + 1 > table.capacity * 3 / 4) {
-            const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
-
-            if (table.capacity == 0)
-                table.entries = (try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity)).ptr
-            else {
-                const new_entries = try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity);
-                @memcpy(new_entries[0..table.count], table.entries[0..table.count]);
-                table.allocator.free(table.entries[0..table.capacity]);
-                table.entries = new_entries.ptr;
-            }
-            @memset(table.entries[0..new_capacity], .{ .key = null, .value = null });
-            table.capacity = new_capacity;
+            try table.grow();
         }
-        var entry_ptr: *Entry = table.findEntry(key);
+        var entry_ptr: *Entry = findEntry(table.entries, table.capacity, key);
+        const isNewKey = entry_ptr.*.key == null;
+        if (isNewKey) {
+            table.count += 1;
+        }
         entry_ptr.key = key.*;
         entry_ptr.value = value;
-        //TODO
-        table.count += 1;
-        return true;
+        return isNewKey;
     }
-    /// Return pointer to Entry which either contains the same key (overwrite) or empty key (empty slot)
-    fn findEntry(table: *const Table, key: *ObjString) *Entry {
-        var idx = key.hash % table.capacity;
-        while (true) : (idx = @mod(idx + 1, table.capacity)) {
-            const e = &table.entries[idx];
-            if (e.key) |found| if (ObjString.eql(found, key.*)) return e;
-            if (e.key == null) return e;
+    fn grow(table: *Table) !void {
+        const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
+
+        if (table.capacity == 0) {
+            table.entries = (try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity)).ptr;
+            @memset(table.entries[0..new_capacity], .{ .key = null, .value = null });
+        } else {
+            const new_entries = try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity);
+            // Rebuild hash table
+            @memset(new_entries[0..new_capacity], .{ .key = null, .value = null });
+            for (table.entries[0..table.capacity]) |e| {
+                if (e.key == null) continue;
+                const dest = findEntry(new_entries.ptr, new_capacity, @constCast(&e.key.?));
+                dest.key = e.key;
+                dest.value = e.value;
+            }
+            table.entries = new_entries.ptr;
+            table.allocator.free(table.entries[0..table.capacity]);
         }
+        table.capacity = new_capacity;
     }
 };
+/// Return pointer to Entry which either contains the same key (overwrite) or empty key (empty slot)
+fn findEntry(entries: [*]Entry, capacity: usize, key: *ObjString) *Entry {
+    var idx = key.hash % capacity;
+    while (true) : (idx = @mod(idx + 1, capacity)) {
+        const e = &entries[idx];
+        if (e.key) |found| if (ObjString.eql(found, key.*)) return e;
+        if (e.key == null) return e;
+    }
+}
 test "Table" {
-    initClHashRandomKey();
+    // initClHashRandomKey();
     const allocator = testing.allocator;
     var table = Table.init(allocator);
     defer table.deinit();
@@ -68,8 +80,12 @@ test "Table" {
     try testing.expect(result);
     try std.testing.expect(table.count == 1);
     try std.testing.expect(table.capacity == 8);
+    // Manually invoke grow()
+    try table.grow();
+    try std.testing.expect(table.count == 1);
+    try std.testing.expect(table.capacity == 16);
     // Check if the value was set
-    const found_entry = table.findEntry(&key);
+    const found_entry = findEntry(table.entries, table.capacity, &key);
     try testing.expect(found_entry.value.?.Number == 42);
 }
 
