@@ -88,7 +88,7 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
         } else {
             // Empty slot: check if it's a tombstone (value == true)
             if (e.value) |v| {
-                if (v == Value{ .Bool = true }) {
+                if (v.isEqual(&Value{ .Bool = true })) {
                     if (tombstone == null) tombstone = e; // First tombstone in the probing sequence
                 } else {
                     // Real empty slot
