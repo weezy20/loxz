@@ -6,7 +6,7 @@ pub const Entry = struct {
 };
 pub const Table = struct {
     allocator: std.mem.Allocator,
-    count: usize,
+    count: usize, // entries + tombstones
     capacity: usize,
     entries: []align(8) Entry,
 
@@ -24,19 +24,34 @@ pub const Table = struct {
         }
         self.* = undefined;
     }
-    pub fn set(table: *Table, key: *ObjString, value: Value) !bool {
+    pub fn set(table: *Table, key: *const ObjString, value: Value) !bool {
         // Grow the array at 75% capacity, can't multiply float with int hence..
         if (table.count + 1 > table.capacity * 3 / 4) {
             try table.grow();
         }
         var entry_ptr: *Entry = findEntry(table.entries, table.capacity, key);
         const isNewKey = entry_ptr.*.key == null;
-        if (isNewKey) {
+        if (isNewKey and entry_ptr.*.value == null) {
             table.count += 1;
         }
         entry_ptr.key = key.*;
         entry_ptr.value = value;
         return isNewKey;
+    }
+    pub fn get(table: *const Table, key: *const ObjString) ?Value {
+        if (table.count == 0) return null;
+        const found = findEntry(table.entries, table.capacity, key);
+        if (found.*.key != null) return found.*.value;
+        return null;
+    }
+    pub fn delete(table: *Table, key: *const ObjString) bool {
+        if (table.count == 0) return false;
+        const found = findEntry(table.entries, table.capacity, key);
+        if (found.*.key == null) return false;
+        // Set tombstone, in this case key = null, value = bool(true)
+        found.*.key = null;
+        found.*.value = Value{ .Bool = true };
+        return true;
     }
     fn grow(table: *Table) !void {
         const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
@@ -48,11 +63,13 @@ pub const Table = struct {
             const new_entries = try table.allocator.alignedAlloc(Entry, 8, new_capacity);
             // Rebuild hash table
             @memset(new_entries[0..new_capacity], .{ .key = null, .value = null });
+            table.count = 0;
             for (table.entries[0..table.capacity]) |e| {
                 if (e.key == null) continue;
-                const dest = findEntry(new_entries, new_capacity, @constCast(&e.key.?));
+                const dest = findEntry(new_entries, new_capacity, &e.key.?);
                 dest.key = e.key;
                 dest.value = e.value;
+                table.count += 1;
             }
             table.allocator.free(table.entries);
             table.entries = new_entries;
@@ -60,13 +77,28 @@ pub const Table = struct {
         table.capacity = new_capacity;
     }
 };
-/// Return pointer to Entry which either contains the same key (overwrite) or empty key (empty slot)
-fn findEntry(entries: []Entry, capacity: usize, key: *ObjString) *Entry {
+/// Return pointer to Entry which either contains the same or empty key (empty slot)
+fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
     var idx = key.hash % capacity;
+    var tombstone: ?*Entry = null;
     while (true) : (idx = @mod(idx + 1, capacity)) {
         const e = &entries[idx];
-        if (e.key) |found| if (ObjString.eql(found, key.*)) return e;
-        if (e.key == null) return e;
+        if (e.key) |found| {
+            if (ObjString.eql(found, key.*)) return e;
+        } else {
+            // Empty slot: check if it's a tombstone (value == true)
+            if (e.value) |v| {
+                if (v == Value{ .Bool = true }) {
+                    if (tombstone == null) tombstone = e; // First tombstone in the probing sequence
+                } else {
+                    // Real empty slot
+                    return if (tombstone) |t| t else e;
+                }
+            } else {
+                // Real empty slot
+                return if (tombstone) |t| t else e;
+            }
+        }
     }
 }
 fn tableAddAll(from: *Table, to: *Table) !void {
