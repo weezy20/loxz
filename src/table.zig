@@ -8,7 +8,7 @@ pub const Table = struct {
     allocator: std.mem.Allocator,
     count: usize,
     capacity: usize,
-    entries: [*]Entry,
+    entries: []align(8) Entry,
 
     pub fn init(allocator: std.mem.Allocator) Table {
         return Table{
@@ -20,7 +20,7 @@ pub const Table = struct {
     }
     pub fn deinit(self: *Table) void {
         if (self.capacity > 0) {
-            self.allocator.free(self.entries[0..self.capacity]);
+            self.allocator.free(@as([]align(8) Entry, self.entries[0..self.capacity]));
         }
         self.* = undefined;
     }
@@ -42,26 +42,26 @@ pub const Table = struct {
         const new_capacity = if (table.capacity < 8) 8 else table.capacity * 2;
 
         if (table.capacity == 0) {
-            table.entries = (try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity)).ptr;
+            table.entries = try table.allocator.alignedAlloc(Entry, 8, new_capacity);
             @memset(table.entries[0..new_capacity], .{ .key = null, .value = null });
         } else {
-            const new_entries = try table.allocator.alignedAlloc(Entry, @alignOf(Entry), new_capacity);
+            const new_entries = try table.allocator.alignedAlloc(Entry, 8, new_capacity);
             // Rebuild hash table
             @memset(new_entries[0..new_capacity], .{ .key = null, .value = null });
             for (table.entries[0..table.capacity]) |e| {
                 if (e.key == null) continue;
-                const dest = findEntry(new_entries.ptr, new_capacity, @constCast(&e.key.?));
+                const dest = findEntry(new_entries, new_capacity, @constCast(&e.key.?));
                 dest.key = e.key;
                 dest.value = e.value;
             }
-            table.entries = new_entries.ptr;
-            table.allocator.free(table.entries[0..table.capacity]);
+            table.allocator.free(table.entries);
+            table.entries = new_entries;
         }
         table.capacity = new_capacity;
     }
 };
 /// Return pointer to Entry which either contains the same key (overwrite) or empty key (empty slot)
-fn findEntry(entries: [*]Entry, capacity: usize, key: *ObjString) *Entry {
+fn findEntry(entries: []Entry, capacity: usize, key: *ObjString) *Entry {
     var idx = key.hash % capacity;
     while (true) : (idx = @mod(idx + 1, capacity)) {
         const e = &entries[idx];
@@ -70,7 +70,7 @@ fn findEntry(entries: [*]Entry, capacity: usize, key: *ObjString) *Entry {
     }
 }
 test "Table" {
-    // initClHashRandomKey();
+    initClHashRandomKey();
     const allocator = testing.allocator;
     var table = Table.init(allocator);
     defer table.deinit();

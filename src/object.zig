@@ -145,5 +145,5 @@ test "Object" {
     try t.expect(@sizeOf(ObjString) == 24);
 }
 
-const hasher = @import("table.zig").loxHash;
-// const hasher = @import("table.zig").clHash;
+// const hasher = @import("table.zig").loxHash;
+const hasher = @import("table.zig").clHash;
