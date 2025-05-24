@@ -168,6 +168,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     .{ .debugInfo = null, .prefix = "VM Executing" },
                 );
             }
+            self.stringTable.printTable();
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {

@@ -78,6 +78,18 @@ pub const Table = struct {
         }
         table.capacity = new_capacity;
     }
+    pub fn printTable(self: *const Table) void {
+        std.debug.print("Table (count: {}, capacity: {}):\n", .{ self.count, self.capacity });
+        for (self.entries, 0..) |entry, index| {
+            if (entry.key) |k| {
+                std.debug.print("{}  Key: {s}, Value: {any}\n", .{ index, k.chars, entry.value.? });
+            } else if (entry.value) |v| {
+                std.debug.print("{}  Tombstone with value: {any}\n", .{ index, v });
+            } else {
+                // std.debug.print("  Empty slot\n", .{});
+            }
+        }
+    }
 };
 /// Return pointer to Entry which either contains the same or empty key (empty slot)
 fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {

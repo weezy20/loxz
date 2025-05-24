@@ -38,7 +38,6 @@ pub const Object = struct {
                 if (FindString(t, strings[0])) |i| {
                     obj_string = i.*;
                     interned = true;
-                    std.debug.print("Interned string: {s}\n", .{obj_string.chars});
                     break :top;
                 }
             }
