@@ -112,12 +112,12 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
 }
 pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
     if (table.count == 0) return null;
-    const hashcode = hasher(chars);
+    const hashcode = hasher(chars); //TODO: Switch to loxHash because chars is not guaranteed to be 8 byte aligned
     var idx = hashcode % table.capacity;
     while (true) : (idx = @mod(idx + 1, table.capacity)) {
         const e = &table.entries[idx];
         if (e.key) |found| {
-            if (std.mem.eql(u8, found.chars, chars) and found.hash == hashcode) {
+            if (found.hash == hashcode and std.mem.eql(u8, found.chars, chars)) {
                 // Found the string
                 return @constCast(&found);
             }
