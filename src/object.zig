@@ -78,7 +78,10 @@ pub const Object = struct {
         obj.* = .{
             .allocator = allocator,
             .data = .{
-                .String = obj_string,
+                .String = if (interned) b: {
+                    obj_string.refcount += 1;
+                    break :b obj_string;
+                } else obj_string,
             },
         };
         if (intern_table) |t| _ = try t.set(&obj.data.String, .Nil);
@@ -133,6 +136,7 @@ pub const Object = struct {
 pub const ObjString = struct {
     chars: []align(8) const u8,
     hash: u64,
+    refcount: usize = 0,
 
     pub fn eql(a: ObjString, b: ObjString) bool {
         // On the rare chance that two strings are different but have the same hash,
@@ -148,10 +152,15 @@ pub const ObjString = struct {
         return ObjString{
             .chars = obj_str_chars,
             .hash = hasher(obj_str_chars),
+            .refcount = 1,
         };
     }
     /// Deallocate the backing array
     pub fn deinit(self: *ObjString, allocator: Allocator) void {
+        if (self.refcount > 1) {
+            self.refcount -= 1;
+            return;
+        }
         allocator.free(self.chars);
         self.*.hash = undefined;
     }
