@@ -27,13 +27,13 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []align(8) const u8, intern_table: ?*Table) !*Object {
+    pub fn newString(allocator: Allocator, strings: []const []const u8, intern_table: ?*Table) !*Object {
         var obj_string: ObjString = undefined;
         var interned: bool = false;
         if (strings.len == 1) top: {
             if (intern_table) |t| {
                 if (FindString(t, strings[0])) |i| {
-                    obj_string = i;
+                    obj_string = i.*;
                     interned = true;
                     break :top;
                 }
@@ -44,7 +44,11 @@ pub const Object = struct {
             for (strings) |s| {
                 total_length += s.len;
             }
-            var buf = try allocator.alignedAlloc(u8, total_length, 8);
+            var buf = try allocator.alignedAlloc(
+                u8,
+                8,
+                total_length,
+            );
             defer allocator.free(buf);
 
             var offset: usize = 0;
@@ -54,7 +58,7 @@ pub const Object = struct {
             }
             if (intern_table) |t| {
                 if (FindString(t, buf)) |i| {
-                    obj_string = i;
+                    obj_string = i.*;
                     interned = true;
                     break :top;
                 }
@@ -75,7 +79,7 @@ pub const Object = struct {
         };
         if (intern_table) |t| {
             const isNewKey = try t.set(&obj.data.String, .Nil);
-            std.debug.assert(isNewKey, "String already exists in table");
+            std.debug.assert(isNewKey);
         }
         return obj;
     }

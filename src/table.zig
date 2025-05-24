@@ -110,7 +110,7 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
         }
     }
 }
-pub fn tableFindString(table: *Table, chars: []align(8) const u8) ?*ObjString {
+pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
     if (table.count == 0) return null;
     const hashcode = hasher(chars);
     var idx = hashcode % table.capacity;
@@ -119,7 +119,7 @@ pub fn tableFindString(table: *Table, chars: []align(8) const u8) ?*ObjString {
         if (e.key) |found| {
             if (std.mem.eql(u8, found.chars, chars) and found.hash == hashcode) {
                 // Found the string
-                return e.key;
+                return @constCast(&found);
             }
         } else {
             // Check for tombstone
