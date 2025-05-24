@@ -119,12 +119,13 @@ fn string() void {
     const str = parser.previous.lexeme[1 .. parser.previous.lexeme.len - 1];
     // We need to allocate the string on the heap
     const value = if (parser.repl_mode) b: {
-        // In REPL mode, we need to allocate the string as the line buffer will get deallocated
-        break :b Value{ .Obj = Object.newString(
+        const objstr = Object.newString(
             parser.allocator,
             &[_][]const u8{str},
             &compilerStringTable,
-        ) catch @panic(HEAP_FAIL) };
+        ) catch @panic(HEAP_FAIL);
+        // In REPL mode, we need to allocate the string as the line buffer will get deallocated
+        break :b Value{ .Obj = objstr.obj };
     } else Value{ .String = str };
     // Emit the string constant
     emitConstant(value) catch @panic(BYTECODE_FAIL);

@@ -27,7 +27,10 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []const u8, intern_table: ?*Table) !*Object {
+    pub fn newString(allocator: Allocator, strings: []const []const u8, intern_table: ?*Table) !struct {
+        obj: *Object,
+        interned: bool,
+    } {
         var obj_string: ObjString = undefined;
         var interned: bool = false;
         if (strings.len == 1) top: {
@@ -80,7 +83,7 @@ pub const Object = struct {
         };
         if (intern_table) |t| _ = try t.set(&obj.data.String, .Nil);
 
-        return obj;
+        return .{ .obj = obj, .interned = interned };
     }
 
     pub fn asString(self: *const Object) ?[]const u8 {
