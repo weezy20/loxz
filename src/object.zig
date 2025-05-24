@@ -78,10 +78,8 @@ pub const Object = struct {
                 .String = obj_string,
             },
         };
-        if (intern_table) |t| {
-            const isNewKey = try t.set(&obj.data.String, .Nil);
-            std.debug.assert(isNewKey);
-        }
+        if (intern_table) |t| _ = try t.set(&obj.data.String, .Nil);
+
         return obj;
     }
 

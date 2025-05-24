@@ -106,16 +106,16 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
     stack_tracing: bool = false,
     debug_level: u8,
     debugInfo: ?*DebugInfo = null,
-    init_string_table: ?Table,
+    init_string_table: ?*Table,
 }) InterpretResult {
     global_debug_level = opts.debug_level;
     self.chunk = chunk;
     self.ip = &chunk.code[0];
     if (opts.init_string_table) |t| {
-        @import("table.zig").tableAddAll(@constCast(&t), &self.stringTable) catch |err| {
+        @import("table.zig").tableAddAll(@constCast(t), &self.stringTable) catch |err| {
             std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
         };
-        @constCast(&t).deinit();
+        t.deinit();
     }
     if (opts.debugInfo) |d| {
         self.debugInfo = d;

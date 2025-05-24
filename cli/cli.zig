@@ -181,7 +181,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
     if (!compile_result[0]) {
         return .compile_error;
     }
-    const compilerTable = compile_result[3];
+    var compilerTable = compile_result[3];
     defer {
         if (compile_result[1]) |d| {
             d.deinit();
@@ -192,7 +192,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
         .debugInfo = compile_result[1],
-        .init_string_table = compilerTable,
+        .init_string_table = &compilerTable,
     });
 }
 
