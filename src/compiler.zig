@@ -1,5 +1,5 @@
 var debug_level: u8 = 0;
-
+var compilerStringTable: Table = undefined;
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
     // For first byte, the line is fetched as parser.previous.line, so we need this
@@ -120,7 +120,11 @@ fn string() void {
     // We need to allocate the string on the heap
     const value = if (parser.repl_mode) b: {
         // In REPL mode, we need to allocate the string as the line buffer will get deallocated
-        break :b Value{ .Obj = Object.newString(parser.allocator, &[_][]const u8{str}, null) catch @panic(HEAP_FAIL) };
+        break :b Value{ .Obj = Object.newString(
+            parser.allocator,
+            &[_][]const u8{str},
+            &compilerStringTable,
+        ) catch @panic(HEAP_FAIL) };
     } else Value{ .String = str };
     // Emit the string constant
     emitConstant(value) catch @panic(BYTECODE_FAIL);
@@ -269,9 +273,11 @@ pub fn compile(
     bool,
     ?*DebugInfo,
     ?CompilerError,
+    Table,
 } {
     compilingChunk = chunk;
     parser.allocator = allocator;
+    compilerStringTable = Table.init(allocator);
     if (opts) |o| {
         if (o.debug) {
             // Allocate DebugInfo on the heap
@@ -294,17 +300,9 @@ pub fn compile(
     consume(TokenType.Eof, "Expect end of expression.");
 
     endCompiler(allocator) catch |err| {
-        return .{
-            !parser.had_error,
-            parser.debugInfo,
-            err,
-        };
+        return .{ !parser.had_error, parser.debugInfo, err, compilerStringTable };
     };
-    return .{
-        !parser.had_error,
-        parser.debugInfo,
-        null,
-    };
+    return .{ !parser.had_error, parser.debugInfo, null, compilerStringTable };
 }
 /// `allocator` is only used in debug mode
 inline fn endCompiler(allocator: std.mem.Allocator) !void {
@@ -327,6 +325,7 @@ const Object = @import("object.zig").Object;
 const BYTECODE_FAIL = "fatal: failed to emit bytecode";
 const HEAP_FAIL = "fatal: failed to heap allocate";
 const CompilerError = @import("error.zig").CompilerError;
+const Table = @import("table.zig").Table;
 
 /// Lowest to highest precedence
 const Precedence = enum {

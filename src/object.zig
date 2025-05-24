@@ -35,6 +35,7 @@ pub const Object = struct {
                 if (FindString(t, strings[0])) |i| {
                     obj_string = i.*;
                     interned = true;
+                    std.debug.print("Interned string: {s}\n", .{obj_string.chars});
                     break :top;
                 }
             }
@@ -110,7 +111,6 @@ pub const Object = struct {
     pub fn isEqual(self: *const Object, other: *const Object) bool {
         // Fast path for same object
         if (self == other) return true;
-
         // Different object types can't be equal
         if (@as(std.meta.Tag(@TypeOf(self.data)), self.data) !=
             @as(std.meta.Tag(@TypeOf(other.data)), other.data))
@@ -120,6 +120,8 @@ pub const Object = struct {
         switch (self.data) {
             .String => |s1| {
                 const s2 = other.data.String;
+                if (&s1 == &s2) return true; // Fast path for same string
+                std.debug.print("Intern comparison failed", .{});
                 return ObjString.eql(s1, s2);
             },
             // else => return false,

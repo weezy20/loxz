@@ -106,7 +106,7 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
 pub fn tableAddAll(from: *Table, to: *Table) !void {
     for (from.entries) |src_entry| {
         if (src_entry.key != null) {
-            try to.set(&src_entry.key, src_entry.value);
+            _ = try to.set(&src_entry.key.?, src_entry.value.?);
         }
     }
 }
