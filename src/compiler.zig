@@ -120,7 +120,7 @@ fn string() void {
     // We need to allocate the string on the heap
     const value = if (parser.repl_mode) b: {
         // In REPL mode, we need to allocate the string as the line buffer will get deallocated
-        break :b Value{ .Obj = Object.newString(parser.allocator, &[_][]const u8{str}) catch @panic(HEAP_FAIL) };
+        break :b Value{ .Obj = Object.newString(parser.allocator, &[_][]const u8{str}, null) catch @panic(HEAP_FAIL) };
     } else Value{ .String = str };
     // Emit the string constant
     emitConstant(value) catch @panic(BYTECODE_FAIL);

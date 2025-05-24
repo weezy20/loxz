@@ -4,6 +4,8 @@ pub const Entry = struct {
     key: ?ObjString,
     value: ?Value,
 };
+
+/// A hash table for key (ObjString) to value (Value) mapping.
 pub const Table = struct {
     allocator: std.mem.Allocator,
     count: usize, // entries + tombstones
@@ -101,12 +103,22 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
         }
     }
 }
-fn tableAddAll(from: *Table, to: *Table) !void {
+pub fn tableAddAll(from: *Table, to: *Table) !void {
     for (from.entries) |src_entry| {
         if (src_entry.key != null) {
             try to.set(&src_entry.key, src_entry.value);
         }
     }
+}
+pub fn tableFindString(table: *Table, chars: []align(8) const u8) ?*ObjString {
+    if (table.count == 0) return null;
+    const key = ObjString{
+        .chars = chars,
+        .hash = clHash(chars),
+    };
+    const found = findEntry(table.entries, table.capacity, &key);
+    if (found.*.key) |f| return &f;
+    return null;
 }
 
 test "Table" {

@@ -27,10 +27,16 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []const u8) !*Object {
+    pub fn newString(allocator: Allocator, strings: []const []const u8, table: ?*Table) !*Object {
         var obj_string: ObjString = undefined;
 
         if (strings.len == 1) {
+            if (table) |t| {
+                const interned = FindString(t, strings[0]);
+                if (interned) |i| {
+                    return i;
+                }
+            }
             obj_string = try ObjString.init(allocator, strings[0]);
         } else {
             var total_length: usize = 0;
@@ -45,6 +51,12 @@ pub const Object = struct {
                 std.mem.copyForwards(u8, buf[offset..], s);
                 offset += s.len;
             }
+            if (table) |t| {
+                const interned = FindString(t, buf);
+                if (interned) |i| {
+                    return i;
+                }
+            }
             obj_string = try ObjString.init(allocator, buf);
         }
 
@@ -58,6 +70,10 @@ pub const Object = struct {
                 .String = obj_string,
             },
         };
+        if (table) |t| {
+            const isNewKey = try t.set(&obj.data.String, .Nil);
+            std.debug.assert(isNewKey, "String already exists in table");
+        }
         return obj;
     }
 
@@ -139,3 +155,5 @@ test "Object" {
 
 // const hasher = @import("table.zig").loxHash;
 const hasher = @import("table.zig").clHash;
+const Table = @import("table.zig").Table;
+const FindString = @import("table.zig").tableFindString;

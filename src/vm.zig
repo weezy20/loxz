@@ -15,6 +15,8 @@ stack: *[STACK_MAX]Value,
 stackTop: [*]Value,
 /// Allocated objects (redundant if using Arena allocator)
 objects: ?*Object = null,
+/// String HashSet
+strings: Table,
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
@@ -27,6 +29,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .allocator = allocator,
         .stack = stackInit,
         .stackTop = stackInit,
+        .strings = Table.init(allocator),
     };
 }
 inline fn stackSize(self: *VM) usize {
@@ -92,6 +95,7 @@ pub fn deinitVM(self: *VM) void {
         }
     }
     self.allocator.destroy(self.stack);
+    self.strings.deinit();
     // TODO: Check if this is the right place to free DebugInfo
     // if (self.debugInfo) |d| {
     //     self.allocator.destroy(d);
@@ -180,6 +184,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     const new_str = try Object.newString(
                         self.allocator,
                         &[_][]const u8{ lhstr, rhstr },
+                        &self.strings,
                     );
                     try self.push(Value{ .Obj = new_str });
                     break :add;
@@ -283,3 +288,4 @@ const DebugInfo = lib.DebugInfo;
 const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
+const Table = lib.Table;
