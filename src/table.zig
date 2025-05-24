@@ -112,12 +112,28 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
 }
 pub fn tableFindString(table: *Table, chars: []align(8) const u8) ?*ObjString {
     if (table.count == 0) return null;
-    const key = ObjString{
-        .chars = chars,
-        .hash = clHash(chars),
-    };
-    const found = findEntry(table.entries, table.capacity, &key);
-    if (found.*.key) |f| return &f;
+    const hashcode = hasher(chars);
+    var idx = hashcode % table.capacity;
+    while (true) : (idx = @mod(idx + 1, table.capacity)) {
+        const e = &table.entries[idx];
+        if (e.key) |found| {
+            if (std.mem.eql(u8, found.chars, chars) and found.hash == hashcode) {
+                // Found the string
+                return e.key;
+            }
+        } else {
+            // Check for tombstone
+            if (e.value) |v| {
+                if (v.isEqual(&Value{ .Bool = true })) {
+                    // Tombstone found, continue probing
+                    continue;
+                }
+            } else {
+                // Real empty slot
+                return null;
+            }
+        }
+    }
     return null;
 }
 
@@ -176,3 +192,4 @@ const clhash = @cImport({
 const Object = @import("object.zig").Object;
 const ObjString = @import("object.zig").ObjString;
 const Value = @import("value.zig").Value;
+const hasher = @import("common.zig").hasher;

@@ -1,4 +1,5 @@
 pub usingnamespace @import("opcode.zig");
+pub usingnamespace @import("common.zig");
 pub usingnamespace @import("chunk.zig");
 pub usingnamespace @import("value.zig");
 pub usingnamespace @import("debug.zig");

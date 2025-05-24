@@ -27,23 +27,24 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []const u8, table: ?*Table) !*Object {
+    pub fn newString(allocator: Allocator, strings: []const []align(8) const u8, intern_table: ?*Table) !*Object {
         var obj_string: ObjString = undefined;
-
-        if (strings.len == 1) {
-            if (table) |t| {
-                const interned = FindString(t, strings[0]);
-                if (interned) |i| {
-                    return i;
+        var interned: bool = false;
+        if (strings.len == 1) top: {
+            if (intern_table) |t| {
+                if (FindString(t, strings[0])) |i| {
+                    obj_string = i;
+                    interned = true;
+                    break :top;
                 }
             }
             obj_string = try ObjString.init(allocator, strings[0]);
-        } else {
+        } else top: {
             var total_length: usize = 0;
             for (strings) |s| {
                 total_length += s.len;
             }
-            var buf = try allocator.alloc(u8, total_length);
+            var buf = try allocator.alignedAlloc(u8, total_length, 8);
             defer allocator.free(buf);
 
             var offset: usize = 0;
@@ -51,16 +52,18 @@ pub const Object = struct {
                 std.mem.copyForwards(u8, buf[offset..], s);
                 offset += s.len;
             }
-            if (table) |t| {
-                const interned = FindString(t, buf);
-                if (interned) |i| {
-                    return i;
+            if (intern_table) |t| {
+                if (FindString(t, buf)) |i| {
+                    obj_string = i;
+                    interned = true;
+                    break :top;
                 }
             }
             obj_string = try ObjString.init(allocator, buf);
         }
-
-        errdefer obj_string.deinit(allocator);
+        errdefer if (!interned) {
+            obj_string.deinit(allocator);
+        };
 
         const obj = try allocator.create(Object);
 
@@ -70,7 +73,7 @@ pub const Object = struct {
                 .String = obj_string,
             },
         };
-        if (table) |t| {
+        if (intern_table) |t| {
             const isNewKey = try t.set(&obj.data.String, .Nil);
             std.debug.assert(isNewKey, "String already exists in table");
         }
@@ -154,6 +157,6 @@ test "Object" {
 }
 
 // const hasher = @import("table.zig").loxHash;
-const hasher = @import("table.zig").clHash;
+const hasher = @import("common.zig").hasher;
 const Table = @import("table.zig").Table;
 const FindString = @import("table.zig").tableFindString;
