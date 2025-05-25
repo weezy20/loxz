@@ -79,6 +79,7 @@ pub const Table = struct {
         table.capacity = new_capacity;
     }
     pub fn printTable(self: *const Table) void {
+        if (self.capacity == 0) return;
         std.debug.print("Table (count: {}, capacity: {}):\n", .{ self.count, self.capacity });
         for (self.entries, 0..) |entry, index| {
             if (entry.key) |k| {

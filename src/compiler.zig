@@ -218,14 +218,7 @@ fn printStatement() void {
 }
 fn expressionStatement() void {
     expression();
-    // // In REPL mode, we don't require a semicolon, but if it's present, consume it.
-    // if (parser.repl_mode) {
-    //     if (check(TokenType.Semicolon)) {
-    //         advance();
-    //     }
-    // } else {
     consume(TokenType.Semicolon, "Expect ';' after expression.");
-    // }
     emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
 }
 /// Parse a statement
