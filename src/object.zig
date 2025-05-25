@@ -35,7 +35,7 @@ pub const Object = struct {
         var interned: bool = false;
         if (strings.len == 1) top: {
             if (intern_table) |t| {
-                if (FindString(t, strings[0])) |i| {
+                if (tableFindString(t, strings[0])) |i| {
                     obj_string = i;
                     interned = true;
                     break :top;
@@ -60,7 +60,7 @@ pub const Object = struct {
                 offset += s.len;
             }
             if (intern_table) |t| {
-                if (FindString(t, buf)) |i| {
+                if (tableFindString(t, buf)) |i| {
                     obj_string = i;
                     interned = true;
                     break :top;
@@ -184,4 +184,4 @@ test "Object" {
 // const hasher = @import("table.zig").loxHash;
 const hasher = @import("common.zig").hasher;
 const Table = @import("table.zig").Table;
-const FindString = @import("table.zig").tableFindString;
+const tableFindString = @import("table.zig").tableFindString;

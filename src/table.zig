@@ -125,7 +125,7 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
 }
 pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
     if (table.count == 0) return null;
-    const hashcode = hasher(chars); //TODO: Switch to loxHash because chars is not guaranteed to be 8 byte aligned
+    const hashcode = hasher(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
     var idx = hashcode % table.capacity;
     while (true) : (idx = @mod(idx + 1, table.capacity)) {
         const e = &table.entries[idx];
