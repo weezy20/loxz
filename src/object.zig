@@ -177,8 +177,8 @@ pub const ObjString = struct {
 
 test "Object" {
     const t = std.testing;
-    try t.expect(@sizeOf(Object) == 48);
-    try t.expect(@sizeOf(ObjString) == 24);
+    try t.expect(@sizeOf(Object) == 32);
+    try t.expect(@sizeOf(ObjString) == 32);
 }
 
 // const hasher = @import("table.zig").loxHash;

@@ -46,8 +46,7 @@ pub const Value = union(enum) {
         };
     }
     pub inline fn isEqual(self: *const Value, other: *const Value) bool {
-        if (self == other) return true;
-
+        // if (self == other) return true; // Warning: NaN == NaN because of this
         return switch (self.*) {
             .Number => |n| switch (other.*) {
                 .Number => |m| n == m,

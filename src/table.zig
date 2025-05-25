@@ -157,7 +157,7 @@ test "Table" {
     defer table.deinit();
     var key = try ObjString.init(allocator, "Hello");
     defer key.deinit(allocator);
-    const result = try table.set(&key, Value{ .Number = 42 });
+    const result = try table.set(key, Value{ .Number = 42 });
     try testing.expect(result);
     try std.testing.expect(table.count == 1);
     try std.testing.expect(table.capacity == 8);
@@ -166,7 +166,7 @@ test "Table" {
     try std.testing.expect(table.count == 1);
     try std.testing.expect(table.capacity == 16);
     // Check if the value was set
-    const found_entry = findEntry(table.entries, table.capacity, &key);
+    const found_entry = findEntry(table.entries, table.capacity, key);
     try testing.expect(found_entry.value.?.Number == 42);
 }
 
