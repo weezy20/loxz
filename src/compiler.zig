@@ -203,6 +203,16 @@ fn parsePrecedence(precedence: Precedence) void {
         infix_rule.?();
     }
 }
+/// Parse a statement
+fn statement() void {
+    if (parser.scanner.match(TokenType.Print)) {
+        printStatement();
+    }
+}
+/// Emit bytecode for a declaration
+fn declaration() void {
+    statement();
+}
 /// Emit bytecode for a expression
 fn expression() void {
     parsePrecedence(Precedence.Assignment);
@@ -293,8 +303,9 @@ pub fn compile(
     }
     parser.scanner = Scanner.init(source);
     advance();
-    expression();
-
+    while (!parser.scanner.match(TokenType.Eof)) {
+        declaration();
+    }
     consume(TokenType.Eof, "Expect end of expression.");
 
     endCompiler(allocator) catch |err| {
