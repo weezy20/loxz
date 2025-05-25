@@ -131,7 +131,6 @@ pub const Object = struct {
             .String => |s1| {
                 const s2 = other.data.String;
                 if (s1 == s2) return true; // Fast path for same string
-                std.debug.print("Intern comparison failed", .{});
                 return ObjString.eql(s1, s2);
             },
             // else => return false,

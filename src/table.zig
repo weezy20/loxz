@@ -1,5 +1,5 @@
 const TABLE_MAX_LOAD = 0.75; // 3 / 4 in integer
-
+const TOMBSTONE_VAL: Value = Value{ .Bool = true };
 pub const Entry = struct {
     key: ?*ObjString,
     value: ?Value,
@@ -52,7 +52,7 @@ pub const Table = struct {
         if (found.*.key == null) return false;
         // Set tombstone, in this case key = null, value = bool(true)
         found.*.key = null;
-        found.*.value = Value{ .Bool = true };
+        found.*.value = TOMBSTONE_VAL;
         return true;
     }
     fn grow(table: *Table) !void {
@@ -103,7 +103,7 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
         } else {
             // Empty slot: check if it's a tombstone (value == true)
             if (e.value) |v| {
-                if (v.isEqual(&Value{ .Bool = true })) {
+                if (v.isEqual(&TOMBSTONE_VAL)) {
                     if (tombstone == null) tombstone = e; // First tombstone in the probing sequence
                 } else {
                     // Real empty slot
@@ -137,7 +137,7 @@ pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
         } else {
             // Check for tombstone
             if (e.value) |v| {
-                if (v.isEqual(&Value{ .Bool = true })) {
+                if (v.isEqual(&TOMBSTONE_VAL)) {
                     // Tombstone found, continue probing
                     continue;
                 }
