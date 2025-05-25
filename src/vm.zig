@@ -265,6 +265,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .PRINT => {
                 printValue(try self.pop());
             },
+            .POP => {
+                _ = try self.pop();
+            },
         }
     }
 }
