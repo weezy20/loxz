@@ -220,6 +220,8 @@ fn printStatement() void {
 fn statement() void {
     if (match(TokenType.Print)) {
         printStatement();
+    } else {
+        expression();
     }
 }
 /// Emit bytecode for a declaration
