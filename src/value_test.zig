@@ -23,13 +23,15 @@ test "isEqual: Numbers" {
     const num1 = Value{ .Number = 42.0 };
     const num2 = Value{ .Number = 42.0 };
     const num3 = Value{ .Number = 43.0 };
-    const nan = Value{ .Number = std.math.nan(f64) };
     const inf = Value{ .Number = std.math.inf(f64) };
 
     try expect(num1.isEqual(&num2)); // Equal numbers
     try expect(!num1.isEqual(&num3)); // Different numbers
-    try expect(!nan.isEqual(&nan)); // NaN != NaN (IEEE 754 rule)
     try expect(inf.isEqual(&inf)); // Inf == Inf
+}
+test "isEqual: Numbers.NaN" {
+    const nan = Value{ .Number = std.math.nan(f64) };
+    try expect(!nan.isEqual(&nan)); // NaN != NaN (IEEE 754 rule)
 }
 
 test "isEqual: Strings" {

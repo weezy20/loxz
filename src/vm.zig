@@ -15,6 +15,8 @@ stack: *[STACK_MAX]Value,
 stackTop: [*]Value,
 /// Allocated objects (redundant if using Arena allocator)
 objects: ?*Object = null,
+/// String HashSet
+stringTable: Table,
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
@@ -27,6 +29,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .allocator = allocator,
         .stack = stackInit,
         .stackTop = stackInit,
+        .stringTable = Table.init(allocator),
     };
 }
 inline fn stackSize(self: *VM) usize {
@@ -52,14 +55,17 @@ fn push(self: *VM, value: Value) RuntimeError!void {
     }
     self.stackTop[0] = value;
     self.stackTop += 1;
-    // Since values are pushed onto the stack using this method, it's a good place to update
-    // our object list
     if (value.isObject()) |obj| {
-        if (global_debug_level > 0)
-            std.debug.print("Pushing object {s} to VM\n", .{obj.*});
-        obj.next = self.objects;
-        self.objects = obj;
+        // If the value is an object, add it to the VM's object list
+        self.addObj(obj);
     }
+}
+
+fn addObj(self: *VM, obj: *Object) void {
+    if (global_debug_level > 0)
+        std.debug.print("Adding object ref {s} to VM\n", .{obj.*});
+    obj.next = self.objects;
+    self.objects = obj;
 }
 
 fn pop(self: *VM) RuntimeError!Value {
@@ -92,16 +98,28 @@ pub fn deinitVM(self: *VM) void {
         }
     }
     self.allocator.destroy(self.stack);
+    self.stringTable.deinit();
     // TODO: Check if this is the right place to free DebugInfo
     // if (self.debugInfo) |d| {
     //     self.allocator.destroy(d);
     // }
 }
 
-pub fn interpret(self: *VM, chunk: *Chunk, opts: struct { stack_tracing: bool = false, debug_level: u8, debugInfo: ?*DebugInfo = null }) InterpretResult {
+pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
+    stack_tracing: bool = false,
+    debug_level: u8,
+    debugInfo: ?*DebugInfo = null,
+    init_string_table: ?*Table,
+}) InterpretResult {
     global_debug_level = opts.debug_level;
     self.chunk = chunk;
     self.ip = &chunk.code[0];
+    if (opts.init_string_table) |t| {
+        @import("table.zig").tableAddAll(@constCast(t), &self.stringTable) catch |err| {
+            std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
+        };
+        t.deinit();
+    }
     if (opts.debugInfo) |d| {
         self.debugInfo = d;
     }
@@ -150,6 +168,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     .{ .debugInfo = null, .prefix = "VM Executing" },
                 );
             }
+            self.stringTable.printTable();
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
@@ -177,11 +196,12 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 if (self.peek(0).isString()) |rhstr| if (self.peek(1).isString()) |lhstr| {
                     _ = try self.pop();
                     _ = try self.pop();
-                    const new_str = try Object.newString(
+                    const o = try Object.newString(
                         self.allocator,
                         &[_][]const u8{ lhstr, rhstr },
+                        &self.stringTable,
                     );
-                    try self.push(Value{ .Obj = new_str });
+                    try self.push(Value{ .Obj = o.obj });
                     break :add;
                 };
                 if (self.peek(0).isNumber()) |rhs| if (self.peek(1).isNumber()) |lhs| {
@@ -283,3 +303,4 @@ const DebugInfo = lib.DebugInfo;
 const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
+const Table = lib.Table;

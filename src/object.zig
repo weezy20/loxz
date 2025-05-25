@@ -8,7 +8,7 @@ pub const Object = struct {
     next: ?*Object = null,
 
     const Data = union(enum) {
-        String: ObjString,
+        String: *ObjString,
         // Function: *Function,
         // Class: *Class,
         // Instance: *Instance,
@@ -27,17 +27,31 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []const u8) !*Object {
-        var obj_string: ObjString = undefined;
-
-        if (strings.len == 1) {
+    pub fn newString(allocator: Allocator, strings: []const []const u8, intern_table: ?*Table) !struct {
+        obj: *Object,
+        interned: bool,
+    } {
+        var obj_string: *ObjString = undefined;
+        var interned: bool = false;
+        if (strings.len == 1) top: {
+            if (intern_table) |t| {
+                if (tableFindString(t, strings[0])) |i| {
+                    obj_string = i;
+                    interned = true;
+                    break :top;
+                }
+            }
             obj_string = try ObjString.init(allocator, strings[0]);
-        } else {
+        } else top: {
             var total_length: usize = 0;
             for (strings) |s| {
                 total_length += s.len;
             }
-            var buf = try allocator.alloc(u8, total_length);
+            var buf = try allocator.alignedAlloc(
+                u8,
+                8,
+                total_length,
+            );
             defer allocator.free(buf);
 
             var offset: usize = 0;
@@ -45,25 +59,45 @@ pub const Object = struct {
                 std.mem.copyForwards(u8, buf[offset..], s);
                 offset += s.len;
             }
+            if (intern_table) |t| {
+                if (tableFindString(t, buf)) |i| {
+                    obj_string = i;
+                    interned = true;
+                    break :top;
+                }
+            }
             obj_string = try ObjString.init(allocator, buf);
         }
-
-        errdefer obj_string.deinit(allocator);
+        errdefer if (!interned) {
+            obj_string.deinit(allocator);
+        };
 
         const obj = try allocator.create(Object);
 
         obj.* = .{
             .allocator = allocator,
             .data = .{
-                .String = obj_string,
+                .String = if (interned) b: {
+                    obj_string.refcount += 1;
+                    break :b obj_string;
+                } else obj_string,
             },
         };
-        return obj;
+        if (intern_table) |t| _ = try t.set(obj.data.String, .Nil);
+
+        return .{ .obj = obj, .interned = interned };
     }
 
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
+            // else => null,
+        };
+    }
+
+    pub fn asObjString(self: *const Object) ?*ObjString {
+        return switch (self.data) {
+            .String => |s| s,
             // else => null,
         };
     }
@@ -78,7 +112,7 @@ pub const Object = struct {
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
-                @constCast(&s).deinit(self.allocator);
+                @constCast(s).deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -87,7 +121,6 @@ pub const Object = struct {
     pub fn isEqual(self: *const Object, other: *const Object) bool {
         // Fast path for same object
         if (self == other) return true;
-
         // Different object types can't be equal
         if (@as(std.meta.Tag(@TypeOf(self.data)), self.data) !=
             @as(std.meta.Tag(@TypeOf(other.data)), other.data))
@@ -97,6 +130,7 @@ pub const Object = struct {
         switch (self.data) {
             .String => |s1| {
                 const s2 = other.data.String;
+                if (s1 == s2) return true; // Fast path for same string
                 return ObjString.eql(s1, s2);
             },
             // else => return false,
@@ -107,35 +141,46 @@ pub const Object = struct {
 pub const ObjString = struct {
     chars: []align(8) const u8,
     hash: u64,
+    refcount: usize = 0,
 
-    pub fn eql(a: ObjString, b: ObjString) bool {
+    pub fn eql(a: *const ObjString, b: *const ObjString) bool {
         // On the rare chance that two strings are different but have the same hash,
         // At least we can shortcircuit the comparison using the hashcode check first
         return a.hash == b.hash and std.mem.eql(u8, a.chars, b.chars);
     }
 
-    pub fn init(allocator: Allocator, from: []const u8) !ObjString {
+    pub fn init(allocator: Allocator, from: []const u8) !*ObjString {
         // const string_chars = try allocator.dupe(u8, chars);
         // u8 alignment is required for clhash
         const obj_str_chars = try allocator.alignedAlloc(u8, 8, from.len);
+        errdefer allocator.free(obj_str_chars);
         @memcpy(obj_str_chars, from);
-        return ObjString{
+        const obj_str = try allocator.create(ObjString);
+        obj_str.* = ObjString{
             .chars = obj_str_chars,
             .hash = hasher(obj_str_chars),
+            .refcount = 1,
         };
+        return obj_str;
     }
     /// Deallocate the backing array
     pub fn deinit(self: *ObjString, allocator: Allocator) void {
+        if (self.refcount > 1) {
+            self.refcount -= 1;
+            return;
+        }
         allocator.free(self.chars);
-        self.*.hash = undefined;
+        allocator.destroy(self);
     }
 };
 
 test "Object" {
     const t = std.testing;
-    try t.expect(@sizeOf(Object) == 48);
-    try t.expect(@sizeOf(ObjString) == 24);
+    try t.expect(@sizeOf(Object) == 32);
+    try t.expect(@sizeOf(ObjString) == 32);
 }
 
 // const hasher = @import("table.zig").loxHash;
-const hasher = @import("table.zig").clHash;
+const hasher = @import("common.zig").hasher;
+const Table = @import("table.zig").Table;
+const tableFindString = @import("table.zig").tableFindString;

@@ -46,17 +46,33 @@ pub const Value = union(enum) {
         };
     }
     pub inline fn isEqual(self: *const Value, other: *const Value) bool {
-        if (std.meta.eql(self.*, other.*)) return true;
-        // Handle string comparisons (both static and object strings)
-        const self_str = self.isString();
-        const other_str = other.isString();
-        if (self_str != null and other_str != null) {
-            return std.mem.eql(u8, self_str.?, other_str.?);
-        }
-        if (self.* == .Obj and other.* == .Obj) {
-            return self.Obj.isEqual(other.Obj);
-        }
-        return false;
+        // if (self == other) return true; // Warning: f64.NaN == f64.NaN because of this
+        return switch (self.*) {
+            .Number => |n| switch (other.*) {
+                .Number => |m| n == m,
+                .Bool => |b| (n == 0 and !b) or (n == 1 and b),
+                else => false,
+            },
+            .Bool => |b| switch (other.*) {
+                .Bool => |b2| b == b2,
+                .Number => |n| (n == 0 and !b) or (n == 1 and b),
+                .Nil => !b,
+                else => false,
+            },
+            .Nil => switch (other.*) {
+                .Nil => true,
+                .Bool => |b| !b,
+                else => false,
+            },
+            .String => |s| switch (other.*) {
+                .String => |other_string| std.mem.eql(u8, s, other_string),
+                else => false,
+            },
+            .Obj => |o| switch (other.*) {
+                .Obj => |other_obj| o == other_obj or o.isEqual(other_obj),
+                else => false,
+            },
+        };
     }
     /// Compare value types not values. For values use `isEqual`.
     pub fn isSameType(self: *const Value, other: *const Value) bool {

@@ -1,9 +1,11 @@
 const TABLE_MAX_LOAD = 0.75; // 3 / 4 in integer
-
+const TOMBSTONE_VAL: Value = Value{ .Bool = true };
 pub const Entry = struct {
-    key: ?ObjString,
+    key: ?*ObjString,
     value: ?Value,
 };
+
+/// A hash table for key (ObjString) to value (Value) mapping.
 pub const Table = struct {
     allocator: std.mem.Allocator,
     count: usize, // entries + tombstones
@@ -34,7 +36,7 @@ pub const Table = struct {
         if (isNewKey and entry_ptr.*.value == null) {
             table.count += 1;
         }
-        entry_ptr.key = key.*;
+        entry_ptr.key = @constCast(key);
         entry_ptr.value = value;
         return isNewKey;
     }
@@ -50,7 +52,7 @@ pub const Table = struct {
         if (found.*.key == null) return false;
         // Set tombstone, in this case key = null, value = bool(true)
         found.*.key = null;
-        found.*.value = Value{ .Bool = true };
+        found.*.value = TOMBSTONE_VAL;
         return true;
     }
     fn grow(table: *Table) !void {
@@ -66,7 +68,7 @@ pub const Table = struct {
             table.count = 0;
             for (table.entries[0..table.capacity]) |e| {
                 if (e.key == null) continue;
-                const dest = findEntry(new_entries, new_capacity, &e.key.?);
+                const dest = findEntry(new_entries, new_capacity, e.key.?);
                 dest.key = e.key;
                 dest.value = e.value;
                 table.count += 1;
@@ -76,6 +78,18 @@ pub const Table = struct {
         }
         table.capacity = new_capacity;
     }
+    pub fn printTable(self: *const Table) void {
+        std.debug.print("Table (count: {}, capacity: {}):\n", .{ self.count, self.capacity });
+        for (self.entries, 0..) |entry, index| {
+            if (entry.key) |k| {
+                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}\n", .{ index, k, k.chars, entry.value.? });
+            } else if (entry.value) |v| {
+                std.debug.print("{}  Tombstone with value: {any}\n", .{ index, v });
+            } else {
+                // std.debug.print("  Empty slot\n", .{});
+            }
+        }
+    }
 };
 /// Return pointer to Entry which either contains the same or empty key (empty slot)
 fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
@@ -84,11 +98,12 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
     while (true) : (idx = @mod(idx + 1, capacity)) {
         const e = &entries[idx];
         if (e.key) |found| {
-            if (ObjString.eql(found, key.*)) return e;
+            // Note: this compares pointer not the string, which is fast and requires string interning
+            if (found == key) return e;
         } else {
             // Empty slot: check if it's a tombstone (value == true)
             if (e.value) |v| {
-                if (v.isEqual(&Value{ .Bool = true })) {
+                if (v.isEqual(&TOMBSTONE_VAL)) {
                     if (tombstone == null) tombstone = e; // First tombstone in the probing sequence
                 } else {
                     // Real empty slot
@@ -101,12 +116,38 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
         }
     }
 }
-fn tableAddAll(from: *Table, to: *Table) !void {
+pub fn tableAddAll(from: *Table, to: *Table) !void {
     for (from.entries) |src_entry| {
         if (src_entry.key != null) {
-            try to.set(&src_entry.key, src_entry.value);
+            _ = try to.set(src_entry.key.?, src_entry.value.?);
         }
     }
+}
+pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
+    if (table.count == 0) return null;
+    const hashcode = hasher(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
+    var idx = hashcode % table.capacity;
+    while (true) : (idx = @mod(idx + 1, table.capacity)) {
+        const e = &table.entries[idx];
+        if (e.key) |found| {
+            if (found.hash == hashcode and std.mem.eql(u8, found.chars, chars)) {
+                // Found the string
+                return @constCast(found);
+            }
+        } else {
+            // Check for tombstone
+            if (e.value) |v| {
+                if (v.isEqual(&TOMBSTONE_VAL)) {
+                    // Tombstone found, continue probing
+                    continue;
+                }
+            } else {
+                // Real empty slot
+                return null;
+            }
+        }
+    }
+    return null;
 }
 
 test "Table" {
@@ -116,7 +157,7 @@ test "Table" {
     defer table.deinit();
     var key = try ObjString.init(allocator, "Hello");
     defer key.deinit(allocator);
-    const result = try table.set(&key, Value{ .Number = 42 });
+    const result = try table.set(key, Value{ .Number = 42 });
     try testing.expect(result);
     try std.testing.expect(table.count == 1);
     try std.testing.expect(table.capacity == 8);
@@ -125,7 +166,7 @@ test "Table" {
     try std.testing.expect(table.count == 1);
     try std.testing.expect(table.capacity == 16);
     // Check if the value was set
-    const found_entry = findEntry(table.entries, table.capacity, &key);
+    const found_entry = findEntry(table.entries, table.capacity, key);
     try testing.expect(found_entry.value.?.Number == 42);
 }
 
@@ -164,3 +205,4 @@ const clhash = @cImport({
 const Object = @import("object.zig").Object;
 const ObjString = @import("object.zig").ObjString;
 const Value = @import("value.zig").Value;
+const hasher = @import("common.zig").hasher;
