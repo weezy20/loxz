@@ -232,6 +232,19 @@ fn statement() void {
 /// Emit bytecode for a declaration
 fn declaration() void {
     statement();
+    if (parser.panic_mode) synchronize();
+}
+fn synchronize() void {
+    parser.panic_mode = false;
+    while (parser.current.tokenType != TokenType.Eof) {
+        if (parser.previous.tokenType == TokenType.Semicolon) return;
+        switch (parser.current.tokenType) {
+            // Statement can begin with any of these tokens
+            .Class, .Fun, .Var, .For, .If, .While, .Print, .Return => return,
+            else => {},
+        }
+        advance();
+    }
 }
 /// Emit bytecode for a expression
 fn expression() void {
