@@ -192,7 +192,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
         .debugInfo = compile_result[1],
-        .init_string_table = &compilerTable,
+        .init_string_table = if (compilerTable.count > 0) &compilerTable else null,
     });
 }
 
