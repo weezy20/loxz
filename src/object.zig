@@ -8,7 +8,7 @@ pub const Object = struct {
     next: ?*Object = null,
 
     const Data = union(enum) {
-        String: ObjString,
+        String: *ObjString,
         // Function: *Function,
         // Class: *Class,
         // Instance: *Instance,
@@ -31,12 +31,12 @@ pub const Object = struct {
         obj: *Object,
         interned: bool,
     } {
-        var obj_string: ObjString = undefined;
+        var obj_string: *ObjString = undefined;
         var interned: bool = false;
         if (strings.len == 1) top: {
             if (intern_table) |t| {
                 if (FindString(t, strings[0])) |i| {
-                    obj_string = i.*;
+                    obj_string = i;
                     interned = true;
                     break :top;
                 }
@@ -61,7 +61,7 @@ pub const Object = struct {
             }
             if (intern_table) |t| {
                 if (FindString(t, buf)) |i| {
-                    obj_string = i.*;
+                    obj_string = i;
                     interned = true;
                     break :top;
                 }
@@ -83,7 +83,7 @@ pub const Object = struct {
                 } else obj_string,
             },
         };
-        if (intern_table) |t| _ = try t.set(&obj.data.String, .Nil);
+        if (intern_table) |t| _ = try t.set(obj.data.String, .Nil);
 
         return .{ .obj = obj, .interned = interned };
     }
@@ -91,6 +91,13 @@ pub const Object = struct {
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
+            // else => null,
+        };
+    }
+
+    pub fn asObjString(self: *const Object) ?*ObjString {
+        return switch (self.data) {
+            .String => |s| s,
             // else => null,
         };
     }
@@ -105,7 +112,7 @@ pub const Object = struct {
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
-                @constCast(&s).deinit(self.allocator);
+                @constCast(s).deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -123,7 +130,7 @@ pub const Object = struct {
         switch (self.data) {
             .String => |s1| {
                 const s2 = other.data.String;
-                if (&s1 == &s2) return true; // Fast path for same string
+                if (s1 == s2) return true; // Fast path for same string
                 std.debug.print("Intern comparison failed", .{});
                 return ObjString.eql(s1, s2);
             },
@@ -137,22 +144,25 @@ pub const ObjString = struct {
     hash: u64,
     refcount: usize = 0,
 
-    pub fn eql(a: ObjString, b: ObjString) bool {
+    pub fn eql(a: *const ObjString, b: *const ObjString) bool {
         // On the rare chance that two strings are different but have the same hash,
         // At least we can shortcircuit the comparison using the hashcode check first
         return a.hash == b.hash and std.mem.eql(u8, a.chars, b.chars);
     }
 
-    pub fn init(allocator: Allocator, from: []const u8) !ObjString {
+    pub fn init(allocator: Allocator, from: []const u8) !*ObjString {
         // const string_chars = try allocator.dupe(u8, chars);
         // u8 alignment is required for clhash
         const obj_str_chars = try allocator.alignedAlloc(u8, 8, from.len);
+        errdefer allocator.free(obj_str_chars);
         @memcpy(obj_str_chars, from);
-        return ObjString{
+        const obj_str = try allocator.create(ObjString);
+        obj_str.* = ObjString{
             .chars = obj_str_chars,
             .hash = hasher(obj_str_chars),
             .refcount = 1,
         };
+        return obj_str;
     }
     /// Deallocate the backing array
     pub fn deinit(self: *ObjString, allocator: Allocator) void {
@@ -161,7 +171,7 @@ pub const ObjString = struct {
             return;
         }
         allocator.free(self.chars);
-        self.*.hash = undefined;
+        allocator.destroy(self);
     }
 };
 

@@ -1,7 +1,7 @@
 const TABLE_MAX_LOAD = 0.75; // 3 / 4 in integer
 
 pub const Entry = struct {
-    key: ?ObjString,
+    key: ?*ObjString,
     value: ?Value,
 };
 
@@ -36,7 +36,7 @@ pub const Table = struct {
         if (isNewKey and entry_ptr.*.value == null) {
             table.count += 1;
         }
-        entry_ptr.key = key.*;
+        entry_ptr.key = @constCast(key);
         entry_ptr.value = value;
         return isNewKey;
     }
@@ -68,7 +68,7 @@ pub const Table = struct {
             table.count = 0;
             for (table.entries[0..table.capacity]) |e| {
                 if (e.key == null) continue;
-                const dest = findEntry(new_entries, new_capacity, &e.key.?);
+                const dest = findEntry(new_entries, new_capacity, e.key.?);
                 dest.key = e.key;
                 dest.value = e.value;
                 table.count += 1;
@@ -82,7 +82,7 @@ pub const Table = struct {
         std.debug.print("Table (count: {}, capacity: {}):\n", .{ self.count, self.capacity });
         for (self.entries, 0..) |entry, index| {
             if (entry.key) |k| {
-                std.debug.print("{}  Key: {s}, Value: {any}\n", .{ index, k.chars, entry.value.? });
+                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}\n", .{ index, k, k.chars, entry.value.? });
             } else if (entry.value) |v| {
                 std.debug.print("{}  Tombstone with value: {any}\n", .{ index, v });
             } else {
@@ -98,7 +98,8 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
     while (true) : (idx = @mod(idx + 1, capacity)) {
         const e = &entries[idx];
         if (e.key) |found| {
-            if (ObjString.eql(found, key.*)) return e;
+            // Note: this compares pointer not the string, which is fast and requires string interning
+            if (found == key) return e;
         } else {
             // Empty slot: check if it's a tombstone (value == true)
             if (e.value) |v| {
@@ -118,7 +119,7 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
 pub fn tableAddAll(from: *Table, to: *Table) !void {
     for (from.entries) |src_entry| {
         if (src_entry.key != null) {
-            _ = try to.set(&src_entry.key.?, src_entry.value.?);
+            _ = try to.set(src_entry.key.?, src_entry.value.?);
         }
     }
 }
@@ -131,7 +132,7 @@ pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
         if (e.key) |found| {
             if (found.hash == hashcode and std.mem.eql(u8, found.chars, chars)) {
                 // Found the string
-                return @constCast(&found);
+                return @constCast(found);
             }
         } else {
             // Check for tombstone
