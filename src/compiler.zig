@@ -203,9 +203,22 @@ fn parsePrecedence(precedence: Precedence) void {
         infix_rule.?();
     }
 }
+fn check(tokenType: TokenType) bool {
+    return parser.current.tokenType == tokenType;
+}
+fn match(tokenType: TokenType) bool {
+    if (!check(tokenType)) return false;
+    advance();
+    return true;
+}
+fn printStatement() void {
+    expression();
+    consume(TokenType.Semicolon, "Expect ';' after value.");
+    emitByte(@intFromEnum(op.PRINT)) catch @panic(BYTECODE_FAIL);
+}
 /// Parse a statement
 fn statement() void {
-    if (parser.scanner.match(TokenType.Print)) {
+    if (match(TokenType.Print)) {
         printStatement();
     }
 }
@@ -303,11 +316,9 @@ pub fn compile(
     }
     parser.scanner = Scanner.init(source);
     advance();
-    while (!parser.scanner.match(TokenType.Eof)) {
+    while (!match(TokenType.Eof)) {
         declaration();
     }
-    consume(TokenType.Eof, "Expect end of expression.");
-
     endCompiler(allocator) catch |err| {
         return .{ !parser.had_error, parser.debugInfo, err, compilerStringTable };
     };

@@ -20,4 +20,5 @@ pub const OpCode = enum(u8) {
     EQUAL, // a != b is !(a == b)
     LESS, // a >= b is !(a < b)
     GREATER, // a <= b is !(a > b)
+    PRINT,
 };

@@ -1,5 +1,6 @@
 const STACK_MAX = 512;
 pub const VM = @This();
+pub const stdout = std.io.getStdOut().writer();
 var global_debug_level: u8 = 0;
 /// Chunk to execute
 chunk: *Chunk,
@@ -173,8 +174,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
             .RETURN => {
-                const val = try self.pop();
-                std.debug.print("{s}\n", .{val});
+                // const val = try self.pop();
+                // std.debug.print("{s}\n", .{val});
                 return;
             },
             .CONSTANT, .CONSTANT_LONG => {
@@ -261,7 +262,20 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const lhs = try self.popNumber();
                 try self.push(Value{ .Bool = lhs < rhs });
             },
+            .PRINT => {
+                printValue(try self.pop());
+            },
         }
+    }
+}
+
+fn printValue(value: Value) void {
+    switch (value) {
+        .Number => |num| stdout.print("{d}\n", .{num}) catch {},
+        .String => |str| stdout.print("{s}\n", .{str}) catch {},
+        .Bool => |b| stdout.print("{s}\n", .{if (b) "true" else "false"}) catch {},
+        .Nil => stdout.print("nil\n", .{}) catch {},
+        .Obj => |obj| stdout.print("{s}\n", .{obj.*}) catch {},
     }
 }
 

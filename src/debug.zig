@@ -45,6 +45,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .LESS => return simpleInstruction("OP_LESS", byte_offset, src_info),
         .GREATER => return simpleInstruction("OP_GREATER", byte_offset, src_info),
         .EQUAL => return simpleInstruction("OP_EQUAL", byte_offset, src_info),
+        .PRINT => return simpleInstruction("OP_PRINT", byte_offset, src_info),
     }
 }
 

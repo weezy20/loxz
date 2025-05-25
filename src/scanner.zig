@@ -37,19 +37,19 @@ pub inline fn advance(sc: *Scanner) u8 {
     return sc.source[sc.current - 1];
 }
 /// Check `current` byte and increment it if it matches `expected`
-inline fn match(sc: *Scanner, expected: u8) bool {
+pub inline fn match(sc: *Scanner, expected: u8) bool {
     if (sc.isAtEnd()) return false; // Safety: prevent out of bounds access
     if (sc.source[sc.current] != expected) return false;
     sc.current += 1;
     return true;
 }
 /// Peek the current byte without incrementing `current`. Returns null if we're out of bounds.
-inline fn peek(sc: *const Scanner) ?u8 {
+pub inline fn peek(sc: *const Scanner) ?u8 {
     if (sc.isAtEnd()) return null; // Safety: prevent out of bounds access
     return sc.source[sc.current];
 }
 /// Peek the next byte without incrementing `current`. Returns null if we're out of bounds.
-inline fn peekNext(sc: *const Scanner) ?u8 {
+pub inline fn peekNext(sc: *const Scanner) ?u8 {
     if (sc.current + 1 >= sc.source.len) return null; // Safety: prevent out of bounds access
     return sc.source[sc.current + 1];
 }
