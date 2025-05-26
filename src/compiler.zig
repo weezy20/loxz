@@ -129,6 +129,9 @@ const emit = struct {
     fn bytes(ops: []const op) void {
         for (ops) |b| emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
+    fn word(w: usize) void {
+        emitUsize(w) catch @panic(BYTECODE_FAIL);
+    }
 };
 
 /// Advance parser by one token, reporting a token error if found.
@@ -144,6 +147,16 @@ fn advance() void {
         // Use ErrorAtCurrent since we're reporting the current token
         ErrorAtCurrent(null);
     }
+}
+/// Emit a variable
+fn variable() void {
+    namedVariable(parser.previous);
+}
+fn namedVariable(name: Token) void {
+    // Get the variable's index in the chunk
+    const arg: usize = identifierConstant(&name);
+    emit.byte(op.GET_GLOBAL);
+    emit.word(arg);
 }
 /// Emit a string
 fn string() void {
@@ -260,6 +273,7 @@ fn statement() void {
         expressionStatement();
     }
 }
+/// Build a non-interned constant for a variable name and return it
 fn identifierConstant(token: *const Token) usize {
     return makeConstant(
         Value{ .Obj = (Object.newString(
@@ -271,7 +285,7 @@ fn identifierConstant(token: *const Token) usize {
 }
 fn parseVariable(errMessage: []const u8) usize {
     consume(TokenType.Identifier, errMessage);
-    //TODO: If error this still proceeds.. fix
+    //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous);
 }
 fn varDeclaration() void {
@@ -504,7 +518,7 @@ const rules = [_]ParseRule{
     // TOKEN_LESS_EQUAL
     ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Equality },
     // TOKEN_IDENTIFIER
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = variable, .infix = null, .precedence = Precedence.None },
     // TOKEN_STRING
     ParseRule{ .prefix = string, .infix = null, .precedence = Precedence.None },
     // TOKEN_NUMBER

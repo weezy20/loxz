@@ -284,6 +284,18 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 _ = try self.globals.set(name, self.peek(0));
                 _ = try self.pop();
             },
+            .GET_GLOBAL => {
+                const name_idx = self.readUsize();
+                const name_val = try self.chunk.constants.get(name_idx);
+                const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
+                if (self.globals.get(name)) |value| {
+                    try self.push(value);
+                } else {
+                    std.debug.print("Undefined: '{s}'\n", .{name.chars});
+                    //TODO: Switch to error with context for runtime errors
+                    return RuntimeError.GlobalNotFound;
+                }
+            },
         }
     }
 }
