@@ -271,6 +271,7 @@ fn identifierConstant(token: *const Token) usize {
 }
 fn parseVariable(errMessage: []const u8) usize {
     consume(TokenType.Identifier, errMessage);
+    //TODO: If error this still proceeds.. fix
     return identifierConstant(&parser.previous);
 }
 fn varDeclaration() void {

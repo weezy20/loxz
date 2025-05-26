@@ -177,7 +177,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     .{ .debugInfo = null, .prefix = "VM Executing" },
                 );
             }
-            self.stringTable.printTable();
+            self.stringTable.printTable("string intern");
+            self.globals.printTable("globals");
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
@@ -280,7 +281,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const name_idx = self.readUsize();
                 const name_val = try self.chunk.constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
-                _ = try self.globals.set(name, try self.pop());
+                _ = try self.globals.set(name, self.peek(0));
+                _ = try self.pop();
             },
         }
     }
