@@ -96,6 +96,14 @@ pub const Value = union(enum) {
         }
         return null;
     }
+    pub fn asObjString(self: *const Value) ?*ObjString {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .String) {
+                return obj.data.String;
+            }
+        }
+        return null;
+    }
 };
 
 /// Value Arrays
@@ -145,3 +153,4 @@ pub const ValueArray = struct {
 const std = @import("std");
 const lib = @import("root.zig");
 const Object = lib.Object;
+const ObjString = lib.ObjString;

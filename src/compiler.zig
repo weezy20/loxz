@@ -67,6 +67,37 @@ fn spanInfo() [2]usize {
         parser.currentSpan,
     };
 }
+fn emitUsize(u: usize) CompilerError!void {
+    const chunk = currentChunk();
+    const debugInfo = parser.debugInfo;
+
+    // Store the starting position for debug info
+    // Assuming the opcode is written in which case, any further writes will be after chunk.count as index position
+    // chunk.code[chunk.count] is the next position to write or chunk.count == 1 + current index
+    const offset_before = chunk.count;
+
+    // Write usize as little-endian bytes
+    const byte_count = @sizeOf(usize);
+    var bytes = u;
+
+    for (0..byte_count) |_| {
+        try chunk.write(@as(u8, @truncate(bytes & 0xFF))); // LSB first (little-endian)
+        bytes >>= 8;
+    }
+
+    // Attach debug info (if any) at the correct offset
+    if (debugInfo) |d| {
+        const line = parser.previous.line;
+        const span = spanInfo();
+        const Location = @import("debug.zig").Location;
+        try d.addLocation(Location{
+            .offset = offset_before, // Use pre-write position
+            .line = line,
+            .start_column = span[0],
+            .end_column = span[1],
+        });
+    }
+}
 fn emitByte(byte: u8) CompilerError!void {
     if (parser.debugInfo) |d| {
         currentChunk().writeWithDebugInfo(
@@ -84,7 +115,7 @@ fn emitByte(byte: u8) CompilerError!void {
     }
 }
 fn emitConstant(value: Value) !void {
-    try currentChunk().writeConstant(
+    _ = try currentChunk().writeConstant(
         value,
         parser.debugInfo,
         parser.previous.line,
@@ -229,9 +260,37 @@ fn statement() void {
         expressionStatement();
     }
 }
+fn identifierConstant(token: *const Token) usize {
+    return makeConstant(
+        Value{ .Obj = (Object.newString(
+            parser.allocator,
+            &[_][]const u8{token.lexeme},
+            null,
+        ) catch @panic(HEAP_FAIL)).obj },
+    );
+}
+fn parseVariable(errMessage: []const u8) usize {
+    consume(TokenType.Identifier, errMessage);
+    return identifierConstant(&parser.previous);
+}
+fn varDeclaration() void {
+    const global: usize = parseVariable("Expect variable name.");
+    if (match(TokenType.Equal)) {
+        expression();
+    } else {
+        emitConstant(Value.Nil) catch @panic(BYTECODE_FAIL);
+    }
+    consume(TokenType.Semicolon, "Expect ';' after variable declaration.");
+    // Emit the variable declaration
+    defineVariable(global);
+}
+fn defineVariable(global: usize) void {
+    emitByte(@intFromEnum(op.DEFINE_GLOBAL)) catch @panic(BYTECODE_FAIL);
+    emitUsize(global) catch @panic(BYTECODE_FAIL);
+}
 /// Emit bytecode for a declaration
 fn declaration() void {
-    statement();
+    if (match(TokenType.Var)) varDeclaration() else statement();
     if (parser.panic_mode) synchronize();
 }
 fn synchronize() void {
@@ -256,6 +315,12 @@ fn consume(@"type": TokenType, message: []const u8) void {
         return;
     }
     ErrorAtCurrent(message);
+}
+fn makeConstant(value: Value) usize {
+    const idx = currentChunk().constants.count;
+    // Add the value directly to the constants table
+    currentChunk().constants.write(value, currentChunk().allocator.*) catch @panic("Failed to write constant");
+    return idx;
 }
 inline fn currentChunk() *Chunk {
     return compilingChunk;

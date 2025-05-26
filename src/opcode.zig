@@ -22,4 +22,5 @@ pub const OpCode = enum(u8) {
     GREATER, // a <= b is !(a > b)
     PRINT,
     POP,
+    DEFINE_GLOBAL,
 };

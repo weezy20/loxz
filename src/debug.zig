@@ -47,6 +47,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .EQUAL => return simpleInstruction("OP_EQUAL", byte_offset, src_info),
         .PRINT => return simpleInstruction("OP_PRINT", byte_offset, src_info),
         .POP => return simpleInstruction("OP_POP", byte_offset, src_info),
+        .DEFINE_GLOBAL => return constantUsizeInstruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
     }
 }
 
@@ -55,13 +56,18 @@ fn simpleInstruction(name: []const u8, offset: usize, src_info: []const u8) usiz
     return offset + 1;
 }
 
+fn constantUsizeInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const partial_offset = constantInstruction(name, chunk, offset, src_info);
+    return partial_offset + 7; // 1 for opcode, 8 for usize index
+}
+
 fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
     const constant_index = chunk.getConstantIdx(offset).?; // Skips 1 byte for OP_CONSTANT
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
-    const stdout = std.io.getStdErr().writer();
-    stdout.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
         dbg("Failed to print constant", .{});
     };
     return offset + 2;
@@ -73,8 +79,8 @@ fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize,
         std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
     };
 
-    const stdout = std.io.getStdErr().writer();
-    stdout.print("{0s} (const idx : {1d}) [{2}]  {3s}\n", .{
+    const stderr = std.io.getStdErr().writer();
+    stderr.print("{0s} (const idx : {1d}) [{2}]  {3s}\n", .{
         name, constant_index, constant_value, src_info,
     }) catch {
         dbg("Failed to print constant", .{});

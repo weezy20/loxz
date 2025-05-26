@@ -82,22 +82,28 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
-    /// Given a `idx` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
-    /// in the ValueArray. If `idx` doesn't contain a constant opcode, return null.
-    pub fn getConstantIdx(self: *const Chunk, idx: usize) ?usize {
-        const instruction: OpCode = @enumFromInt(self.code[idx]);
+    /// Given a `offset` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
+    /// in the ValueArray. If `offset` doesn't contain an opcode, return it.
+    pub fn getConstantIdx(self: *const Chunk, offset: usize) ?usize {
+        const instruction: OpCode = @enumFromInt(self.code[offset]);
         switch (instruction) {
             .CONSTANT => {
-                return @as(usize, self.code[idx + 1]);
+                return @as(usize, self.code[offset + 1]);
             },
             .CONSTANT_LONG => {
-                return @as(usize, self.code[idx + 1]) << 16 |
-                    @as(usize, self.code[idx + 2]) << 8 |
-                    @as(usize, self.code[idx + 3]);
+                return @as(usize, self.code[offset + 1]) << 16 |
+                    @as(usize, self.code[offset + 2]) << 8 |
+                    @as(usize, self.code[offset + 3]);
             },
-            else => {
-                return null;
+            .DEFINE_GLOBAL => {
+                // Return the next 8 bytes as a usize (little-endian)
+                var usize_idx: usize = 0x00;
+                inline for (0..8) |i| {
+                    usize_idx = (usize_idx << 8) | self.code[offset + 1 + i];
+                }
+                return usize_idx;
             },
+            else => return null,
         }
     }
 

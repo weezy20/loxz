@@ -5,7 +5,7 @@ var global_debug_level: u8 = 0;
 /// Chunk to execute
 chunk: *Chunk,
 /// Bytecode instruction pointer
-ip: *u8,
+ip: [*]u8,
 /// Optional debug info to print during execution
 debugInfo: ?*DebugInfo = null,
 /// Allocator for the VM
@@ -18,6 +18,8 @@ stackTop: [*]Value,
 objects: ?*Object = null,
 /// String HashSet
 stringTable: Table,
+/// Global variables
+globals: Table,
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
@@ -31,7 +33,37 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .stack = stackInit,
         .stackTop = stackInit,
         .stringTable = Table.init(allocator),
+        .globals = Table.init(allocator),
     };
+}
+pub fn deinitVM(self: *VM) void {
+    if (global_debug_level > 0)
+        std.debug.print("Running destructor on VM\n", .{});
+
+    // Print all objects following the next pointer
+    if (self.objects) |obj| {
+        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
+        var current: *Object = obj;
+        var idx: usize = 0;
+        while (true) {
+            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current });
+            const next = current.next;
+            current.deinit();
+            if (next) |next_obj| {
+                current = next_obj;
+                idx += 1;
+            } else {
+                break;
+            }
+        }
+    }
+    self.allocator.destroy(self.stack);
+    self.stringTable.deinit();
+    self.globals.deinit();
+    // TODO: Check if this is the right place to free DebugInfo
+    // if (self.debugInfo) |d| {
+    //     self.allocator.destroy(d);
+    // }
 }
 inline fn stackSize(self: *VM) usize {
     return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
@@ -77,35 +109,6 @@ fn pop(self: *VM) RuntimeError!Value {
     return self.stackTop[0];
 }
 
-pub fn deinitVM(self: *VM) void {
-    if (global_debug_level > 0)
-        std.debug.print("Running destructor on VM\n", .{});
-
-    // Print all objects following the next pointer
-    if (self.objects) |obj| {
-        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
-        var current: *Object = obj;
-        var idx: usize = 0;
-        while (true) {
-            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current });
-            const next = current.next;
-            current.deinit();
-            if (next) |next_obj| {
-                current = next_obj;
-                idx += 1;
-            } else {
-                break;
-            }
-        }
-    }
-    self.allocator.destroy(self.stack);
-    self.stringTable.deinit();
-    // TODO: Check if this is the right place to free DebugInfo
-    // if (self.debugInfo) |d| {
-    //     self.allocator.destroy(d);
-    // }
-}
-
 pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
     stack_tracing: bool = false,
     debug_level: u8,
@@ -114,7 +117,7 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
 }) InterpretResult {
     global_debug_level = opts.debug_level;
     self.chunk = chunk;
-    self.ip = &chunk.code[0];
+    self.ip = chunk.code;
     if (opts.init_string_table) |t| {
         @import("table.zig").tableAddAll(@constCast(t), &self.stringTable) catch |err| {
             std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
@@ -133,11 +136,16 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
 }
 
 inline fn readByte(self: *VM) u8 {
-    const byte = self.ip.*;
-    self.ip = @ptrFromInt(@intFromPtr(self.ip) + 1);
+    const byte = self.ip[0];
+    self.ip += 1;
     return byte;
 }
-
+/// Interpret 8 bytes in litte-endian
+inline fn readUsize(self: *VM) usize {
+    const bytes = self.ip[0..8].*;
+    self.ip += 8;
+    return std.mem.readInt(usize, bytes[0..], .little);
+}
 inline fn readConstant(self: *VM, long: bool) usize {
     if (!long) {
         return self.readByte();
@@ -267,6 +275,12 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .POP => {
                 _ = try self.pop();
+            },
+            .DEFINE_GLOBAL => {
+                const name_idx = self.readUsize();
+                const name_val = try self.chunk.constants.get(name_idx);
+                const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
+                _ = try self.globals.set(name, try self.pop());
             },
         }
     }
