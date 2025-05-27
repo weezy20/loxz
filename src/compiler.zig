@@ -331,6 +331,7 @@ fn consume(@"type": TokenType, message: []const u8) void {
     }
     ErrorAtCurrent(message);
 }
+/// Make a constant value and return its index in the chunk's constants table
 fn makeConstant(value: Value) usize {
     const idx = currentChunk().constants.count;
     // Add the value directly to the constants table
