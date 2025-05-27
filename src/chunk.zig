@@ -82,6 +82,38 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
+    /// Write a u16 value to chunk that is used for index for OP_DEFINE_GLOBAL or OP_GET_GLOBAL
+    pub fn writeU16Constant(
+        self: *Chunk,
+        value: Value,
+        index: usize,
+        op: OpCode,
+        debugInfo: ?*DebugInfo,
+        line: ?usize,
+        span: ?[2]usize,
+    ) !void {
+        if (index >= (1 << 16)) {
+            return error.Exceed16BitsIndex;
+        }
+        // Write the constant to ValueArray
+        try self.constants.write(value, self.allocator.*);
+        const const_offset = self.count + 1; // +1 for skipping opcode
+        // Write opcode
+        try self.write(@intFromEnum(op));
+        // Write the index as a u16 (big-endian)
+        try self.write(@as(u8, @truncate(index >> 8))); // bits 8-15 (high byte)
+        try self.write(@as(u8, @truncate(index & 0xFF))); // bits 0-7 (low byte)
+        // Write debug info if provided
+        if (debugInfo) |d| {
+            const location = Location{
+                .offset = const_offset,
+                .line = line orelse 0,
+                .start_column = if (span) |s| s[0] else 0,
+                .end_column = if (span) |s| s[1] else 0,
+            };
+            try d.addLocation(location);
+        }
+    }
     /// Given a `offset` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
     /// in the ValueArray. If `offset` doesn't contain an opcode, return it.
     pub fn getConstantIdx(self: *const Chunk, offset: usize) ?usize {
@@ -96,9 +128,9 @@ pub const Chunk = struct {
                     @as(usize, self.code[offset + 3]);
             },
             .DEFINE_GLOBAL, .GET_GLOBAL => {
-                // Return the next 8 bytes as a usize (little-endian)
+                // Interpret the next 16 bytes as a usize (big-endian)
                 var usize_idx: usize = 0x00;
-                inline for (0..8) |i| {
+                inline for (0..2) |i| {
                     usize_idx = (usize_idx << 8) | self.code[offset + 1 + i];
                 }
                 return usize_idx;

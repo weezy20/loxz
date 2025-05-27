@@ -140,11 +140,11 @@ inline fn readByte(self: *VM) u8 {
     self.ip += 1;
     return byte;
 }
-/// Interpret 8 bytes in litte-endian
-inline fn readUsize(self: *VM) usize {
-    const bytes = self.ip[0..8].*;
-    self.ip += 8;
-    return std.mem.readInt(usize, bytes[0..], .little);
+/// Interpret u16 as big-endian, return as usize
+inline fn readU16(self: *VM) usize {
+    const bytes: [2]u8 = .{ self.ip[0], self.ip[1] };
+    self.ip += 2;
+    return @as(usize, std.mem.readInt(u16, bytes[0..], .big));
 }
 inline fn readConstant(self: *VM, long: bool) usize {
     if (!long) {
@@ -278,14 +278,14 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 _ = try self.pop();
             },
             .DEFINE_GLOBAL => {
-                const name_idx = self.readUsize();
+                const name_idx = self.readU16();
                 const name_val = try self.chunk.constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
                 _ = try self.pop();
             },
             .GET_GLOBAL => {
-                const name_idx = self.readUsize();
+                const name_idx = self.readU16();
                 const name_val = try self.chunk.constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 if (self.globals.get(name)) |value| {

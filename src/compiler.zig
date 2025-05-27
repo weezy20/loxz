@@ -67,37 +67,6 @@ fn spanInfo() [2]usize {
         parser.currentSpan,
     };
 }
-fn emitUsize(u: usize) CompilerError!void {
-    const chunk = currentChunk();
-    const debugInfo = parser.debugInfo;
-
-    // Store the starting position for debug info
-    // Assuming the opcode is written in which case, any further writes will be after chunk.count as index position
-    // chunk.code[chunk.count] is the next position to write or chunk.count == 1 + current index
-    const offset_before = chunk.count;
-
-    // Write usize as little-endian bytes
-    const byte_count = @sizeOf(usize);
-    var bytes = u;
-
-    for (0..byte_count) |_| {
-        try chunk.write(@as(u8, @truncate(bytes & 0xFF))); // LSB first (little-endian)
-        bytes >>= 8;
-    }
-
-    // Attach debug info (if any) at the correct offset
-    if (debugInfo) |d| {
-        const line = parser.previous.line;
-        const span = spanInfo();
-        const Location = @import("debug.zig").Location;
-        try d.addLocation(Location{
-            .offset = offset_before, // Use pre-write position
-            .line = line,
-            .start_column = span[0],
-            .end_column = span[1],
-        });
-    }
-}
 fn emitByte(byte: u8) CompilerError!void {
     if (parser.debugInfo) |d| {
         currentChunk().writeWithDebugInfo(
@@ -122,15 +91,23 @@ fn emitConstant(value: Value) !void {
         spanInfo(),
     );
 }
+fn emitU16Op(b: op, arg: usize) CompilerError!void {
+    try emitByte(@intFromEnum(b));
+    if (arg > 65535) {
+        // Safe: we know that arg is <= 65535
+        @panic("Argument exceeds maximum allowed value of 65535");
+    }
+    // Emit the argument as two separate bytes: MSB (Most Significant Byte) and LSB (Least Significant Byte).
+    // This ensures the 16-bit value is correctly represented in the bytecode.
+    try emitByte(@intCast((arg >> 8) & 0xff)); // MSB
+    try emitByte(@intCast(arg & 0xff)); // LSB
+}
 const emit = struct {
     fn byte(b: op) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
     fn bytes(ops: []const op) void {
         for (ops) |b| emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
-    }
-    fn word(w: usize) void {
-        emitUsize(w) catch @panic(BYTECODE_FAIL);
     }
 };
 
@@ -155,8 +132,7 @@ fn variable() void {
 fn namedVariable(name: Token) void {
     // Get the variable's index in the chunk
     const arg: usize = identifierConstant(&name);
-    emit.byte(op.GET_GLOBAL);
-    emit.word(arg);
+    emitU16Op(op.GET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
 }
 /// Emit a string
 fn string() void {
@@ -290,6 +266,10 @@ fn parseVariable(errMessage: []const u8) usize {
 }
 fn varDeclaration() void {
     const global: usize = parseVariable("Expect variable name.");
+    if (global > std.math.maxInt(u16)) {
+        Error("Cannot declare more than 65535 variables in a single function");
+        return;
+    }
     if (match(TokenType.Equal)) {
         expression();
     } else {
@@ -300,8 +280,7 @@ fn varDeclaration() void {
     defineVariable(global);
 }
 fn defineVariable(global: usize) void {
-    emitByte(@intFromEnum(op.DEFINE_GLOBAL)) catch @panic(BYTECODE_FAIL);
-    emitUsize(global) catch @panic(BYTECODE_FAIL);
+    emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
@@ -333,9 +312,10 @@ fn consume(@"type": TokenType, message: []const u8) void {
 }
 /// Make a constant value and return its index in the chunk's constants table
 fn makeConstant(value: Value) usize {
-    const idx = currentChunk().constants.count;
+    var chunk = currentChunk();
+    const idx = chunk.constants.count;
     // Add the value directly to the constants table
-    currentChunk().constants.write(value, currentChunk().allocator.*) catch @panic("Failed to write constant");
+    chunk.constants.write(value, chunk.allocator.*) catch @panic("Failed to write constant");
     return idx;
 }
 inline fn currentChunk() *Chunk {

@@ -1,3 +1,5 @@
+const stderr = std.io.getStdErr().writer();
+
 /// Disassemble a single instruction and return next offset
 pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator: std.mem.Allocator, opts: struct {
     debugInfo: ?*DebugInfo,
@@ -47,8 +49,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .EQUAL => return simpleInstruction("OP_EQUAL", byte_offset, src_info),
         .PRINT => return simpleInstruction("OP_PRINT", byte_offset, src_info),
         .POP => return simpleInstruction("OP_POP", byte_offset, src_info),
-        .DEFINE_GLOBAL => return constantUsizeInstruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
-        .GET_GLOBAL => return constantUsizeInstruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
+        .DEFINE_GLOBAL => return constantU16Instruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
+        .GET_GLOBAL => return constantU16Instruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
     }
 }
 
@@ -56,10 +58,16 @@ fn simpleInstruction(name: []const u8, offset: usize, src_info: []const u8) usiz
     dbg("{s}\t{1s}\n", .{ name, src_info });
     return offset + 1;
 }
-
-fn constantUsizeInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
-    const partial_offset = constantInstruction(name, chunk, offset, src_info);
-    return partial_offset + 7; // 1 for opcode, 8 for usize index
+/// Instruction followed by a u16 constant index
+fn constantU16Instruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const constant_index = chunk.getConstantIdx(offset).?; // Skips 1 byte for OP_DEFINE_GLOBAL or OP_GET_GLOBAL
+    const constant_val = chunk.constants.get(constant_index) catch |err| {
+        std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
+    };
+    stderr.print("{0s} (const idx : {1d}_u16) [{2}]\t{3s}\n", .{ name, constant_index, constant_val, src_info }) catch |err| {
+        dbg("Failed to print constant: {}", .{err});
+    };
+    return offset + 3; // 1 for opcode, 2 for u16 index
 }
 
 fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
@@ -67,7 +75,6 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
-    const stderr = std.io.getStdErr().writer();
     stderr.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
         dbg("Failed to print constant", .{});
     };
@@ -80,7 +87,6 @@ fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize,
         std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
     };
 
-    const stderr = std.io.getStdErr().writer();
     stderr.print("{0s} (const idx : {1d}) [{2}]  {3s}\n", .{
         name, constant_index, constant_value, src_info,
     }) catch {
