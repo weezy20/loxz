@@ -48,7 +48,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .PRINT => return simpleInstruction("OP_PRINT", byte_offset, src_info),
         .POP => return simpleInstruction("OP_POP", byte_offset, src_info),
         .DEFINE_GLOBAL => return constantUsizeInstruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
-        .GET_GLOBAL => return simpleInstruction("OP_GET_GLOBAL", byte_offset, src_info),
+        .GET_GLOBAL => return constantUsizeInstruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
     }
 }
 
