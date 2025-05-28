@@ -173,7 +173,7 @@ pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const compile_result = lib.compile(source, &chunk, allocator, .{
+    const compile_result = lib.compile(source, &chunk, vm, allocator, .{
         .debug = config.debug,
         .debug_level = config.debug_level,
         .repl_mode = config.repl_mode,

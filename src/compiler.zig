@@ -16,6 +16,7 @@ var parser: Parser = Parser{
     .currentSpan = 0,
     .repl_mode = true,
     .allocator = undefined,
+    .vm = undefined,
 };
 var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
@@ -32,6 +33,7 @@ const Parser = struct {
     currentSpan: usize, // TODO: downgrade to u32
     repl_mode: bool,
     allocator: std.mem.Allocator,
+    vm: *VM,
 
     fn reset(self: *Parser) void {
         self.previous = Token{
@@ -127,11 +129,11 @@ fn advance() void {
 }
 /// Emit a variable
 fn variable() void {
-    namedVariable(parser.previous);
+    namedVariable(parser.previous, &parser.vm.globals);
 }
-fn namedVariable(name: Token) void {
+fn namedVariable(name: Token, intern_table: ?*Table) void {
     // Get the variable's index in the chunk
-    const arg: usize = identifierConstant(&name);
+    const arg: usize = identifierConstant(&name, intern_table);
     emitU16Op(op.GET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
 }
 /// Emit a string
@@ -250,22 +252,22 @@ fn statement() void {
     }
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
-fn identifierConstant(token: *const Token) usize {
+fn identifierConstant(token: *const Token, intern_table: ?*Table) usize {
     return makeConstant(
         Value{ .Obj = (Object.newString(
             parser.allocator,
             &[_][]const u8{token.lexeme},
-            null,
+            intern_table orelse null,
         ) catch @panic(HEAP_FAIL)).obj },
     );
 }
-fn parseVariable(errMessage: []const u8) usize {
+fn parseVariable(errMessage: []const u8, intern_table: ?*Table) usize {
     consume(TokenType.Identifier, errMessage);
     //TODO: If error this still proceeds silently.. fix
-    return identifierConstant(&parser.previous);
+    return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
-    const global: usize = parseVariable("Expect variable name.");
+    const global: usize = parseVariable("Expect variable name.", &parser.vm.globals);
     if (global > std.math.maxInt(u16)) {
         Error("Cannot declare more than 65535 variables in a single function");
         return;
@@ -362,6 +364,7 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
 pub fn compile(
     source: []const u8,
     chunk: *Chunk,
+    vm: *VM,
     allocator: std.mem.Allocator,
     opts: ?struct {
         debug: bool,
@@ -376,6 +379,7 @@ pub fn compile(
 } {
     compilingChunk = chunk;
     parser.allocator = allocator;
+    parser.vm = vm;
     compilerStringTable = Table.init(allocator);
     if (opts) |o| {
         if (o.debug) {
@@ -424,6 +428,7 @@ const BYTECODE_FAIL = "fatal: failed to emit bytecode";
 const HEAP_FAIL = "fatal: failed to heap allocate";
 const CompilerError = @import("error.zig").CompilerError;
 const Table = @import("table.zig").Table;
+const VM = @import("vm.zig").VM;
 
 /// Lowest to highest precedence
 const Precedence = enum {
