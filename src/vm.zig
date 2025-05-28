@@ -170,8 +170,10 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     .{ .debugInfo = null, .prefix = "VM Executing" },
                 );
             }
-            self.stringTable.printTable("string intern");
-            self.globals.printTable("globals");
+            if (global_debug_level >= 2) {
+                self.stringTable.printTable("string intern");
+                self.globals.printTable("globals");
+            }
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
