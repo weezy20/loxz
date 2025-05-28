@@ -42,31 +42,27 @@ pub fn deinitVM(self: *VM) void {
 
     self.stringTable.deinit();
     self.globals.deinit();
-
+    self.freeObjects();
+    self.allocator.destroy(self.stack);
+}
+inline fn stackSize(self: *VM) usize {
+    return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
+}
+fn freeObjects(self: *VM) void {
     if (self.objects) |obj| {
         if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
         var current: ?*Object = obj;
         var idx: usize = 0;
-        while (current) |obj_ptr| : ({
-            current = obj_ptr.next;
-            idx += 1;
-        }) {
-            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, obj_ptr });
-            const next = obj_ptr.next;
-            obj_ptr.next = null;
-            obj_ptr.deinit();
+
+        while (current) |current_ptr| : (idx += 1) {
+            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current_ptr });
+
+            const next = current_ptr.next;
+            current_ptr.next = null;
+            current_ptr.deinit();
             current = next;
         }
     }
-
-    self.allocator.destroy(self.stack);
-    // TODO: Check if this is the right place to free DebugInfo
-    // if (self.debugInfo) |d| {
-    //     self.allocator.destroy(d);
-    // }
-}
-inline fn stackSize(self: *VM) usize {
-    return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
 }
 
 pub fn resetStack(self: *VM) void {

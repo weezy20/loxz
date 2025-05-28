@@ -123,7 +123,7 @@ pub const Object = struct {
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
-                @constCast(s).deinit(self.allocator);
+                s.deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
