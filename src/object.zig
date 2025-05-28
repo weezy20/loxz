@@ -88,11 +88,6 @@ pub const Object = struct {
             },
         };
 
-        // Add to VM's object list unless interned (already tracked)
-        if (!interned) {
-            vm.addObj(obj);
-        }
-
         // Add to intern table if provided
         if (intern_table) |t| {
             if (t.set(obj.data.String, .Nil)) |_| {} else |err| {
@@ -103,7 +98,8 @@ pub const Object = struct {
                 return err;
             }
         }
-
+        // Even if the string is interned, the Object object is a heap allocation and must be tracked.
+        vm.addObj(obj);
         return .{ .obj = obj, .interned = interned };
     }
 
@@ -152,6 +148,8 @@ pub const Object = struct {
 pub const ObjString = struct {
     chars: []align(8) const u8,
     hash: u64,
+    // U32 could've been used here but 4 bytes would've been added as padding anyway
+    // due to `chars` being 8-byte aligned
     refcount: usize = 0,
 
     pub fn eql(a: *const ObjString, b: *const ObjString) bool {
@@ -176,6 +174,7 @@ pub const ObjString = struct {
     }
     /// Deallocate the backing array
     pub fn deinit(self: *ObjString, allocator: Allocator) void {
+        std.debug.assert(self.refcount != 0);
         if (self.refcount > 1) {
             self.refcount -= 1;
             return;

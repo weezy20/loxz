@@ -42,7 +42,7 @@
             "request": "launch",
             "name": "Run File (debug)",
             "program" : "${workspaceFolder}/zig-out/bin/loxz",
-            "args": ["${file}", "-dd"],
+            "args": ["-dd", "${file}"],
             "cwd": "${workspaceFolder}",
             "preLaunchTask": "zig build",
         }

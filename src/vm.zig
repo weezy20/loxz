@@ -55,8 +55,13 @@ fn freeObjects(self: *VM) void {
         var idx: usize = 0;
 
         while (current) |current_ptr| : (idx += 1) {
-            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current_ptr });
-
+            if (global_debug_level > 0) {
+                std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current_ptr });
+                if (current_ptr.asObjString()) |o| {
+                    std.debug.print("   String chars ptr: 0x{x}\n", .{@intFromPtr(o.chars.ptr)});
+                    std.debug.print("   String chars    : {s}\n", .{o.chars});
+                }
+            }
             const next = current_ptr.next;
             current_ptr.next = null;
             current_ptr.deinit();
