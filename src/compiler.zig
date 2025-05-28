@@ -253,12 +253,14 @@ fn statement() void {
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
 fn identifierConstant(token: *const Token, intern_table: ?*Table) usize {
+    const obj = (Object.newString(
+        parser.allocator,
+        &[_][]const u8{token.lexeme},
+        intern_table orelse null,
+    ) catch @panic(HEAP_FAIL)).obj;
+    parser.vm.addObj(obj);
     return makeConstant(
-        Value{ .Obj = (Object.newString(
-            parser.allocator,
-            &[_][]const u8{token.lexeme},
-            intern_table orelse null,
-        ) catch @panic(HEAP_FAIL)).obj },
+        Value{ .Obj = obj },
     );
 }
 fn parseVariable(errMessage: []const u8, intern_table: ?*Table) usize {

@@ -95,7 +95,7 @@ fn push(self: *VM, value: Value) RuntimeError!void {
     }
 }
 
-fn addObj(self: *VM, obj: *Object) void {
+pub fn addObj(self: *VM, obj: *Object) void {
     if (global_debug_level > 0)
         std.debug.print("Adding object ref {s} to VM\n", .{obj.*});
     obj.next = self.objects;
