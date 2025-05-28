@@ -5,6 +5,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
+    // const allocator = std.heap.c_allocator;
     cli.setup();
     var config = cli.parseArgs(allocator) catch |err| {
         std.debug.print("Error parsing CLI : {}\n", .{err});
