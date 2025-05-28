@@ -129,7 +129,7 @@ fn advance() void {
 }
 /// Emit a variable
 fn variable() void {
-    namedVariable(parser.previous, &parser.vm.globals);
+    namedVariable(parser.previous, &compilerStringTable);
 }
 fn namedVariable(name: Token, intern_table: ?*Table) void {
     // Get the variable's index in the chunk
@@ -267,7 +267,7 @@ fn parseVariable(errMessage: []const u8, intern_table: ?*Table) usize {
     return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
-    const global: usize = parseVariable("Expect variable name.", &parser.vm.globals);
+    const global: usize = parseVariable("Expect variable name.", &compilerStringTable);
     if (global > std.math.maxInt(u16)) {
         Error("Cannot declare more than 65535 variables in a single function");
         return;

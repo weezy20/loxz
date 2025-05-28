@@ -73,13 +73,14 @@ pub fn resetStack(self: *VM) void {
     self.stackTop = self.stack;
 }
 fn printStack(self: *VM) void {
-    std.debug.print("Stack [ ", .{});
+    // ANSI escape for bold red: \x1b[1;31m, reset: \x1b[0m
+    std.debug.print("\x1b[1;31mStack [ ", .{});
     var current: [*]Value = self.stack;
     while (@intFromPtr(current) < @intFromPtr(self.stackTop)) : (current += 1) {
         const value = current[0];
         std.debug.print("<{}> ", .{value});
     }
-    std.debug.print(" ]\n", .{});
+    std.debug.print(" ]\x1b[0m\n", .{});
 }
 
 fn push(self: *VM, value: Value) RuntimeError!void {

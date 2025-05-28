@@ -80,7 +80,7 @@ pub const Table = struct {
     }
     pub fn printTable(self: *const Table, name: []const u8) void {
         if (self.capacity == 0) return;
-        std.debug.print("Table {s} (count: {}, capacity: {}):\n", .{ name, self.count, self.capacity });
+        std.debug.print("\x1b[1;33mTable {s} (count: {}, capacity: {}):\x1b[0m\n", .{ name, self.count, self.capacity });
         for (self.entries, 0..) |entry, index| {
             if (entry.key) |k| {
                 std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}\n", .{ index, k, k.chars, entry.value.? });
