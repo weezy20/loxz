@@ -15,10 +15,15 @@ pub const Object = struct {
         // Array: *Array,
 
         pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
             _ = options;
             switch (self) {
-                .String => |s| try writer.print("Object string: [\"{s}\"]", .{s.chars}),
+                .String => |s| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.writeAll(s.chars);
+                    } else { // Debug mode: `{}`
+                        try writer.print("Object string: [\"{s}\"]", .{s.chars});
+                    }
+                },
             }
         }
     };
