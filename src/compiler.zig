@@ -249,7 +249,7 @@ fn statement() void {
         expressionStatement();
     }
 }
-/// Build a non-interned constant for a variable name and return it
+/// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
 fn identifierConstant(token: *const Token) usize {
     return makeConstant(
         Value{ .Obj = (Object.newString(
@@ -311,12 +311,9 @@ fn consume(@"type": TokenType, message: []const u8) void {
     ErrorAtCurrent(message);
 }
 /// Make a constant value and return its index in the chunk's constants table
+/// Writes a 2 byte index. If one byte is needed use chunk.constants.write() directly.
 fn makeConstant(value: Value) usize {
-    var chunk = currentChunk();
-    const idx = chunk.constants.count;
-    // Add the value directly to the constants table
-    chunk.constants.write(value, chunk.allocator.*) catch @panic("Failed to write constant");
-    return idx;
+    return currentChunk().writeU16Constant(value) catch @panic("developer: propagate this error up");
 }
 inline fn currentChunk() *Chunk {
     return compilingChunk;

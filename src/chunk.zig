@@ -29,6 +29,24 @@ pub const Chunk = struct {
         self.constants.deinit(self.allocator.*);
         self.* = undefined; // Prevent's use after free during compilation
     }
+    /// Print raw bytecode
+    pub fn print(self: *const Chunk, header: []const u8) void {
+        if (self.count == 0) {
+            dbg("{s} -- Chunk is empty\n", .{header});
+            return;
+        }
+        dbg("{s} -- Chunk: {d} bytes, {d} constants\n", .{ header, self.count, self.constants.count });
+        dbg("Code begin: [", .{});
+        for (self.code[0..self.count]) |byte| {
+            dbg("0x{x},", .{byte});
+        }
+        dbg("]", .{});
+        // dbg("\nConstants:\n", .{});
+        // for (self.constants.values, 0..) |value, i| {
+        //     dbg("idx {d}: {any}, ", .{ i, value });
+        // }
+        dbg("\n", .{});
+    }
 
     /// Write a bytecode to the chunk, with DebugInfo
     pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, span: [2]usize) !void {
@@ -82,37 +100,19 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
-    /// Write a u16 value to chunk that is used for index for OP_DEFINE_GLOBAL or OP_GET_GLOBAL
+    /// Add a value to chunk.constants, checking for u16 index limit and returning the index as usize.
+    /// Writes the constant index as a u16 (big-endian) but returns usize.
     pub fn writeU16Constant(
         self: *Chunk,
         value: Value,
-        index: usize,
-        op: OpCode,
-        debugInfo: ?*DebugInfo,
-        line: ?usize,
-        span: ?[2]usize,
-    ) !void {
+    ) !usize {
+        const index = self.constants.count;
         if (index >= (1 << 16)) {
             return error.Exceed16BitsIndex;
         }
         // Write the constant to ValueArray
         try self.constants.write(value, self.allocator.*);
-        const const_offset = self.count + 1; // +1 for skipping opcode
-        // Write opcode
-        try self.write(@intFromEnum(op));
-        // Write the index as a u16 (big-endian)
-        try self.write(@as(u8, @truncate(index >> 8))); // bits 8-15 (high byte)
-        try self.write(@as(u8, @truncate(index & 0xFF))); // bits 0-7 (low byte)
-        // Write debug info if provided
-        if (debugInfo) |d| {
-            const location = Location{
-                .offset = const_offset,
-                .line = line orelse 0,
-                .start_column = if (span) |s| s[0] else 0,
-                .end_column = if (span) |s| s[1] else 0,
-            };
-            try d.addLocation(location);
-        }
+        return index;
     }
     /// Given a `offset` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
     /// in the ValueArray. If `offset` doesn't contain an opcode, return it.

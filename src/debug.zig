@@ -75,7 +75,7 @@ fn constantInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src
     const constant_value = chunk.constants.get(constant_index) catch |err| {
         std.debug.panic("Error getting constant: {}", .{err});
     }; // Look up the constant with bounds check
-    stderr.print("{0s} (const idx : {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
+    stderr.print("{0s} (const idx : {1d}_u8) [{2}]\t{3s}\n", .{ name, constant_index, constant_value, src_info }) catch {
         dbg("Failed to print constant", .{});
     };
     return offset + 2;
@@ -87,7 +87,7 @@ fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize,
         std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
     };
 
-    stderr.print("{0s} (const idx : {1d}) [{2}]  {3s}\n", .{
+    stderr.print("{0s} (const idx : {1d}_u24) [{2}]  {3s}\n", .{
         name, constant_index, constant_value, src_info,
     }) catch {
         dbg("Failed to print constant", .{});
