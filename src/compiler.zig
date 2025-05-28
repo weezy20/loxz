@@ -142,7 +142,7 @@ fn string() void {
     // We need to allocate the string on the heap
     const value = b: {
         const objstr = Object.newString(
-            parser.allocator,
+            parser.vm,
             &[_][]const u8{str},
             &compilerStringTable,
         ) catch @panic(HEAP_FAIL);
@@ -254,11 +254,10 @@ fn statement() void {
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
 fn identifierConstant(token: *const Token, intern_table: ?*Table) usize {
     const obj = (Object.newString(
-        parser.allocator,
+        parser.vm,
         &[_][]const u8{token.lexeme},
         intern_table orelse null,
     ) catch @panic(HEAP_FAIL)).obj;
-    parser.vm.addObj(obj);
     return makeConstant(
         Value{ .Obj = obj },
     );

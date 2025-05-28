@@ -40,26 +40,26 @@ pub fn deinitVM(self: *VM) void {
     if (global_debug_level > 0)
         std.debug.print("Running destructor on VM\n", .{});
 
-    // Print all objects following the next pointer
-    if (self.objects) |obj| {
-        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
-        var current: *Object = obj;
-        var idx: usize = 0;
-        while (true) {
-            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current });
-            const next = current.next;
-            current.deinit();
-            if (next) |next_obj| {
-                current = next_obj;
-                idx += 1;
-            } else {
-                break;
-            }
-        }
-    }
-    self.allocator.destroy(self.stack);
     self.stringTable.deinit();
     self.globals.deinit();
+
+    if (self.objects) |obj| {
+        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
+        var current: ?*Object = obj;
+        var idx: usize = 0;
+        while (current) |obj_ptr| : ({
+            current = obj_ptr.next;
+            idx += 1;
+        }) {
+            if (global_debug_level > 0) std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, obj_ptr });
+            const next = obj_ptr.next;
+            obj_ptr.next = null;
+            obj_ptr.deinit();
+            current = next;
+        }
+    }
+
+    self.allocator.destroy(self.stack);
     // TODO: Check if this is the right place to free DebugInfo
     // if (self.debugInfo) |d| {
     //     self.allocator.destroy(d);
@@ -89,10 +89,6 @@ fn push(self: *VM, value: Value) RuntimeError!void {
     }
     self.stackTop[0] = value;
     self.stackTop += 1;
-    if (value.isObject()) |obj| {
-        // If the value is an object, add it to the VM's object list
-        self.addObj(obj);
-    }
 }
 
 pub fn addObj(self: *VM, obj: *Object) void {
@@ -208,7 +204,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     _ = try self.pop();
                     _ = try self.pop();
                     const o = try Object.newString(
-                        self.allocator,
+                        self,
                         &[_][]const u8{ lhstr, rhstr },
                         &self.stringTable,
                     );
