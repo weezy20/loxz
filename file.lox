@@ -2,6 +2,6 @@
 // var breakfast = "beignets with " + beverage;
 // print breakfast;
 
-var a = 1;
+// var a = 1;
 a = 3;
 print a;

@@ -199,12 +199,7 @@ fn reportResult(result: InterpretResult, repl_mode: bool) !void {
     const stdout = std.io.getStdOut().writer();
     if (result != .ok) {
         switch (result) {
-            .runtime_error => |err| {
-                try stdout.writeAll("\x1b[33mRuntime error: \x1b[0m");
-                const msg = lib.formatRuntimeError(err);
-                try stdout.writeAll(msg);
-                try stdout.writeAll("\n");
-            },
+            .runtime_error => {},
             .compile_error => {
                 if (!repl_mode) {
                     try stdout.writeAll("Compiler error\n");

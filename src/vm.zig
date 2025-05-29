@@ -1,6 +1,8 @@
 const STACK_MAX = 512;
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
+const stderr = std.io.getStdErr().writer();
+
 var global_debug_level: u8 = 0;
 /// Chunk to execute
 chunk: *Chunk,
@@ -299,7 +301,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 if (self.globals.get(name)) |value| {
                     try self.push(value);
                 } else {
-                    std.debug.print("Undefined: '{s}'\n", .{name.chars});
+                    // Call runtimeError with format string and args
+                    self.runtimeError("Undefined global variable: '{s}'", .{name.chars});
                     //TODO: Switch to error with context for runtime errors
                     return RuntimeError.GlobalNotFound;
                 }
@@ -309,7 +312,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const name = (try self.chunk.constants.get(name_idx)).asObjString().?;
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
-                    std.debug.print("Undefined: '{s}'\n", .{name.chars});
+                    // Call runtimeError with format string and args
+                    self.runtimeError("Undefined global variable: '{s}'", .{name.chars});
                     return RuntimeError.GlobalNotFound;
                 }
             },
@@ -366,3 +370,27 @@ const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
 const Table = lib.Table;
+
+fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
+    if (self.debugInfo) |d| {
+        // Calculate current instruction offset
+        // self.ip points to the NEXT instruction, so subtract 1 for the current opcode
+        // If the error is due to an operand, this might need adjustment or more info from the caller.
+        const offset = @intFromPtr(self.ip) - @intFromPtr(self.chunk.code) - 1;
+        const line = d.getLine(offset);
+        // ANSI escape for yellow gold: \x1b[1;33m, reset: \x1b[0m
+        if (line) |l| {
+            stderr.print("\x1b[1;33mRuntime error at line {}:\x1b[0m ", .{l}) catch {};
+            stderr.print(fmt_str, args) catch {};
+            stderr.print("\n", .{}) catch {};
+        } else {
+            stderr.print("\x1b[1;33mRuntime error:\x1b[0m ", .{}) catch {};
+            stderr.print(fmt_str, args) catch {};
+            stderr.print("\n", .{}) catch {};
+        }
+    } else {
+        stderr.print("\x1b[1;33mRuntime error:\x1b[0m ", .{}) catch {};
+        stderr.print(fmt_str, args) catch {};
+        stderr.print("\n", .{}) catch {};
+    }
+}
