@@ -98,7 +98,7 @@ fn emitConstant(value: Value) !void {
 }
 fn emitU16Op(b: op, arg: usize) CompilerError!void {
     try emitByte(@intFromEnum(b));
-    if (arg > 65535) {
+    if (arg > std.math.maxInt(u16)) {
         // Safe: we know that arg is <= 65535
         @panic("Argument exceeds maximum allowed value of 65535");
     }
@@ -573,12 +573,8 @@ const rules = [_]ParseRule{
 };
 
 const CompilationResult = struct {
-    /// If true, the compilation was successful
     success: bool,
-    /// Debug info if debug mode is enabled
     debugInfo: ?*DebugInfo,
-    /// Error if any occurred during compilation
     err: ?CompilerError,
-    /// String table used for interned strings
     stringTable: Table,
 };
