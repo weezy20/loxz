@@ -177,20 +177,21 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
         .debug_level = config.debug_level,
         .repl_mode = config.repl_mode,
     });
-    if (!compile_result[0]) {
-        return .compile_error;
-    }
-    var compilerTable = compile_result[3];
+    var compilerTable = compile_result.stringTable;
     defer {
-        if (compile_result[1]) |d| {
+        if (compile_result.debugInfo) |d| {
             d.deinit();
             allocator.destroy(d);
         }
     }
+    if (!compile_result.success) {
+        compilerTable.deinit();
+        return .compile_error;
+    }
     return lib.interpret(vm, &chunk, .{
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
-        .debugInfo = compile_result[1],
+        .debugInfo = compile_result.debugInfo,
         .init_string_table = if (compilerTable.count > 0) &compilerTable else null,
     });
 }

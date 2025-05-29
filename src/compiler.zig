@@ -394,12 +394,7 @@ pub fn compile(
         debug_level: ?u8,
         repl_mode: bool,
     },
-) struct {
-    bool,
-    ?*DebugInfo,
-    ?CompilerError,
-    Table,
-} {
+) CompilationResult {
     compilingChunk = chunk;
     parser.allocator = allocator;
     parser.vm = vm;
@@ -425,9 +420,19 @@ pub fn compile(
         declaration();
     }
     endCompiler(allocator) catch |err| {
-        return .{ !parser.had_error, parser.debugInfo, err, compilerStringTable };
+        return .{
+            .success = !parser.had_error,
+            .debugInfo = parser.debugInfo,
+            .err = err,
+            .stringTable = compilerStringTable,
+        };
     };
-    return .{ !parser.had_error, parser.debugInfo, null, compilerStringTable };
+    return .{
+        .success = !parser.had_error,
+        .debugInfo = parser.debugInfo,
+        .err = null,
+        .stringTable = compilerStringTable,
+    };
 }
 /// `allocator` is only used in debug mode
 inline fn endCompiler(allocator: std.mem.Allocator) !void {
@@ -565,4 +570,15 @@ const rules = [_]ParseRule{
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_EOF
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+};
+
+const CompilationResult = struct {
+    /// If true, the compilation was successful
+    success: bool,
+    /// Debug info if debug mode is enabled
+    debugInfo: ?*DebugInfo,
+    /// Error if any occurred during compilation
+    err: ?CompilerError,
+    /// String table used for interned strings
+    stringTable: Table,
 };

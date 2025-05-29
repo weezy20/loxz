@@ -50,7 +50,7 @@ pub fn deinitVM(self: *VM) void {
 inline fn stackSize(self: *VM) usize {
     return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
 }
-fn freeObjects(self: *VM) void {
+pub fn freeObjects(self: *VM) void {
     if (self.objects) |obj| {
         if (global_debug_level >= 2) std.debug.print("VM Objects:\n", .{});
         var current: ?*Object = obj;
