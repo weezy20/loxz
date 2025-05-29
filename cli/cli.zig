@@ -5,10 +5,6 @@ const std = @import("std");
 const lib = @import("loxz");
 const VM = lib.VM;
 
-pub fn setup() void {
-    lib.initClHashRandomKey();
-}
-
 pub const Config = struct {
     debug: bool,
     debug_level: u8,
