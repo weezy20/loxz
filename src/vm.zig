@@ -313,7 +313,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
                     // Call runtimeError with format string and args
-                    self.runtimeError("Undefined global variable: '{s}'", .{name.chars});
+                    self.runtimeError("Assignment of undefined global variable: '{s}'", .{name.chars});
                     return RuntimeError.GlobalNotFound;
                 }
             },
