@@ -12,6 +12,9 @@ pub const Config = struct {
     file_path: ?[]const u8,
     repl_mode: bool = undefined,
 };
+fn setup() void {
+    lib.initHash();
+}
 
 pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
@@ -36,7 +39,7 @@ pub fn parseArgs(allocator: std.mem.Allocator) !Config {
         try clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
         std.process.exit(0);
     }
-
+    setup();
     return .{
         // Provide false as default if the flags weren't provided
         .debug = res.args.debug != 0,

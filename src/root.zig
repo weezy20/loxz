@@ -14,14 +14,13 @@ const build_options = @import("build_options");
 
 // Make hasClhash a comptime constant
 pub const hasClhash = build_options.has_clhash;
+var RANDOM: ?*anyopaque = null;
 
 // Conditionally define the functions
 pub const ClHash = if (hasClhash) struct {
     const clhash = @cImport({
         @cInclude("clhash.h");
     });
-
-    var RANDOM: ?*anyopaque = null;
 
     pub fn init() void {
         if (RANDOM == null) {
@@ -43,7 +42,7 @@ pub const ClHash = if (hasClhash) struct {
 };
 
 // Initialize during startup
-comptime {
+pub fn initHash() void {
     if (hasClhash) {
         ClHash.init();
     }
