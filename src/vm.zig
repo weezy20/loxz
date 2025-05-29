@@ -39,7 +39,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
     };
 }
 pub fn deinitVM(self: *VM) void {
-    if (global_debug_level > 0)
+    if (global_debug_level >= 2)
         std.debug.print("Running destructor on VM\n", .{});
 
     self.stringTable.deinit();
@@ -52,12 +52,12 @@ inline fn stackSize(self: *VM) usize {
 }
 fn freeObjects(self: *VM) void {
     if (self.objects) |obj| {
-        if (global_debug_level > 0) std.debug.print("VM Objects:\n", .{});
+        if (global_debug_level >= 2) std.debug.print("VM Objects:\n", .{});
         var current: ?*Object = obj;
         var idx: usize = 0;
 
         while (current) |current_ptr| : (idx += 1) {
-            if (global_debug_level > 0) {
+            if (global_debug_level >= 2) {
                 std.debug.print(" - Destroy Object {} at {p}\n", .{ idx, current_ptr });
                 if (current_ptr.asObjString()) |o| {
                     std.debug.print("   String chars ptr: 0x{x}\n", .{@intFromPtr(o.chars.ptr)});
