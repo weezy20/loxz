@@ -140,8 +140,6 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
             vm.resetStack();
             lib.resetParser();
         }
-        try reportResult(result, true);
-
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
 }
@@ -162,11 +160,10 @@ pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
     var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
     config.repl_mode = false;
-    const result = interpret(source, config, allocator, &vm) catch |err| {
+    _ = interpret(source, config, allocator, &vm) catch |err| {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
-    try reportResult(result, false);
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
@@ -194,21 +191,6 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
         .debugInfo = compile_result.debugInfo,
         .init_string_table = if (compilerTable.count > 0) &compilerTable else null,
     });
-}
-
-fn reportResult(result: InterpretResult, repl_mode: bool) !void {
-    const stdout = std.io.getStdOut().writer();
-    if (result != .ok) {
-        switch (result) {
-            .runtime_error => {},
-            .compile_error => {
-                if (!repl_mode) {
-                    try stdout.writeAll("Compiler error\n");
-                }
-            },
-            .ok => {},
-        }
-    }
 }
 
 const InterpretResult = @import("loxz").InterpretResult;
