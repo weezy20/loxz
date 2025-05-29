@@ -152,7 +152,6 @@ pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
 }
 
 test "Table" {
-    initClHashRandomKey();
     const allocator = testing.allocator;
     var table = Table.init(allocator);
     defer table.deinit();
@@ -172,7 +171,6 @@ test "Table" {
 }
 
 /// FNV-1a hash function
-// We don't use it in loxz because we chose to go with clhash instead!
 pub fn loxHash(key: []const u8) u64 {
     var hash: u64 = 2166136261;
     for (key) |char| {
@@ -185,25 +183,26 @@ test "loxHash" {
     const expected_hash = 10461433681597188260;
     try testing.expect(expected_hash == loxHash("Zig is amazing"));
 }
-/// Note: pointer must be 8 byte aligned
-pub fn clHash(key: []const u8) u64 {
-    return clhash.clhash(RANDOM, key.ptr, key.len);
-}
-pub fn initClHashRandomKey() void {
-    if (RANDOM == null)
-        RANDOM = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?
-    else
-        @panic("Not allowed");
-}
 
 var RANDOM: ?*anyopaque = null;
-
 const std = @import("std");
 const testing = std.testing;
-const clhash = @cImport({
-    @cInclude("clhash.h");
-});
 const Object = @import("object.zig").Object;
 const ObjString = @import("object.zig").ObjString;
 const Value = @import("value.zig").Value;
 const hasher = @import("common.zig").hasher;
+const clhash = @import("common.zig").clhasher;
+const lib = @import("root.zig");
+
+test "clhash" {
+    if (lib.hasClhash) {
+        lib.ClHash.init();
+        const str = try ObjString.init(testing.allocator, "Zig is amazing");
+        defer str.deinit(testing.allocator);
+        const hash = clhash(str.chars);
+        try testing.expect(hash == 0x104f5a15cd5f5168);
+    } else {
+        try testing.expect(!lib.hasClhash);
+        // no-op
+    }
+}
