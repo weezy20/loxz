@@ -191,3 +191,18 @@ const Object = @import("object.zig").Object;
 const ObjString = @import("object.zig").ObjString;
 const Value = @import("value.zig").Value;
 const hasher = @import("common.zig").hasher;
+const clhash = @import("common.zig").clhasher;
+const lib = @import("root.zig");
+
+test "clhash" {
+    if (lib.hasClhash) {
+        lib.ClHash.init();
+        const str = try ObjString.init(testing.allocator, "Zig is amazing");
+        defer str.deinit(testing.allocator);
+        const hash = clhash(str.chars);
+        try testing.expect(hash == 0x104f5a15cd5f5168);
+    } else {
+        try testing.expect(!lib.hasClhash);
+        // no-op
+    }
+}
