@@ -117,7 +117,7 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
     self.chunk = chunk;
     self.ip = chunk.code;
     if (opts.init_string_table) |t| {
-        @import("table.zig").tableAddAll(@constCast(t), &self.stringTable) catch |err| {
+        lib.tableAddAll(@constCast(t), &self.stringTable) catch |err| {
             std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
         };
         t.deinit();
