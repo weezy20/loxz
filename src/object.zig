@@ -131,7 +131,7 @@ pub const Object = struct {
     }
 
     pub fn isEqual(self: *const Object, other: *const Object) bool {
-        // Fast path for same object
+        // Fast path for same object (interned strs)
         if (self == other) return true;
         // Different object types can't be equal
         if (@as(std.meta.Tag(@TypeOf(self.data)), self.data) !=

@@ -100,7 +100,7 @@ pub fn addObj(self: *VM, obj: *Object) void {
 }
 
 fn pop(self: *VM) RuntimeError!Value {
-    if (@intFromPtr(self.stackTop) < @intFromPtr(self.stack)) {
+    if (self.stackSize() == 0) {
         return RuntimeError.StackUnderflow;
     }
     self.stackTop -= 1;
@@ -306,15 +306,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .SET_GLOBAL => {
                 const name_idx = self.readU16();
-                const name = (try self.chunk.constants.get(name_idx)).asObjString().?; // Safe
-                if (self.globals.get(name)) |defined_var| {
-                    const set_expr = try self.pop();
-                    if (defined_var.isEqual(&set_expr)) {
-                        // No change, skip
-                        continue;
-                    }
-                    _ = try self.globals.set(name, set_expr);
-                } else {
+                const name = (try self.chunk.constants.get(name_idx)).asObjString().?;
+                if (try self.globals.set(name, self.peek(0))) {
+                    std.debug.assert(self.globals.delete(name));
                     std.debug.print("Undefined: '{s}'\n", .{name.chars});
                     return RuntimeError.GlobalNotFound;
                 }
