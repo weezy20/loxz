@@ -17,6 +17,7 @@ var parser: Parser = Parser{
     .repl_mode = true,
     .allocator = undefined,
     .vm = undefined,
+    .canAssign = null,
 };
 var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
@@ -34,6 +35,7 @@ const Parser = struct {
     repl_mode: bool,
     allocator: std.mem.Allocator,
     vm: *VM,
+    canAssign: ?bool,
 
     fn reset(self: *Parser) void {
         self.previous = Token{
@@ -49,6 +51,7 @@ const Parser = struct {
         self.had_error = false;
         self.panic_mode = false;
         self.currentSpan = 0;
+        self.canAssign = null;
     }
 };
 pub fn resetParser() void {
@@ -129,12 +132,16 @@ fn advance() void {
 }
 /// Emit a variable
 fn variable() void {
-    namedVariable(parser.previous, &compilerStringTable);
+    namedVariable(
+        parser.previous,
+        parser.canAssign.?,
+        &compilerStringTable,
+    );
 }
-fn namedVariable(name: Token, intern_table: *Table) void {
+fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
     // Fetch the variable's index in the chunk constant pool
     const arg: usize = identifierConstant(&name, intern_table);
-    if (match(TokenType.Equal)) {
+    if (canAssign and match(TokenType.Equal)) {
         expression();
         emitU16Op(op.SET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
     } else {
@@ -220,7 +227,13 @@ fn unary() void {
 fn parsePrecedence(precedence: Precedence) void {
     advance();
     const prefix_rule = getRule(parser.previous.tokenType).prefix;
-    if (prefix_rule) |rule| rule() else {
+    const global_canAssign = parser.canAssign;
+    const local_canAssign = @intFromEnum(precedence) <= @intFromEnum(Precedence.Assignment);
+    if (prefix_rule) |rule| {
+        parser.canAssign = local_canAssign;
+        rule();
+        parser.canAssign = global_canAssign;
+    } else {
         Error("Expect expression");
         return;
     }
@@ -228,6 +241,9 @@ fn parsePrecedence(precedence: Precedence) void {
         advance();
         const infix_rule = getRule(parser.previous.tokenType).infix;
         infix_rule.?();
+    }
+    if (local_canAssign and match(TokenType.Equal)) {
+        Error("Invalid assignment target.");
     }
 }
 fn check(tokenType: TokenType) bool {
