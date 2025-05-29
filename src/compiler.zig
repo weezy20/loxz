@@ -131,10 +131,15 @@ fn advance() void {
 fn variable() void {
     namedVariable(parser.previous, &compilerStringTable);
 }
-fn namedVariable(name: Token, intern_table: ?*Table) void {
-    // Get the variable's index in the chunk
+fn namedVariable(name: Token, intern_table: *Table) void {
+    // Fetch the variable's index in the chunk constant pool
     const arg: usize = identifierConstant(&name, intern_table);
-    emitU16Op(op.GET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
+    if (match(TokenType.Equal)) {
+        expression();
+        emitU16Op(op.SET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
+    } else {
+        emitU16Op(op.GET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
+    }
 }
 /// Emit a string
 fn string() void {
@@ -228,6 +233,7 @@ fn parsePrecedence(precedence: Precedence) void {
 fn check(tokenType: TokenType) bool {
     return parser.current.tokenType == tokenType;
 }
+/// Match the current token with the provided token type, consuming & advancing it if it matches.
 fn match(tokenType: TokenType) bool {
     if (!check(tokenType)) return false;
     advance();
@@ -252,17 +258,17 @@ fn statement() void {
     }
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
-fn identifierConstant(token: *const Token, intern_table: ?*Table) usize {
+fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     const obj = (Object.newString(
         parser.vm,
         &[_][]const u8{token.lexeme},
-        intern_table orelse null,
+        intern_table,
     ) catch @panic(HEAP_FAIL)).obj;
     return makeConstant(
         Value{ .Obj = obj },
     );
 }
-fn parseVariable(errMessage: []const u8, intern_table: ?*Table) usize {
+fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
     //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);

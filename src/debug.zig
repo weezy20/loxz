@@ -51,6 +51,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .POP => return simpleInstruction("OP_POP", byte_offset, src_info),
         .DEFINE_GLOBAL => return constantU16Instruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
         .GET_GLOBAL => return constantU16Instruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
+        .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),
     }
 }
 

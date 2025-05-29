@@ -156,6 +156,8 @@ inline fn readConstant(self: *VM, long: bool) usize {
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
     var debug_offset: usize = 0;
+    var global_count: usize = 0;
+    var string_count: usize = 0;
     while (debug_offset < self.chunk.count) {
         if (stack_tracing) self.printStack();
         if (global_debug_level > 0) {
@@ -165,19 +167,25 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.chunk,
                     debug_offset,
                     self.allocator,
-                    .{ .debugInfo = d, .prefix = "VM Executing" },
+                    .{ .debugInfo = d, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             } else {
                 debug_offset = lib.disassembleInstruction(
                     self.chunk,
                     debug_offset,
                     self.allocator,
-                    .{ .debugInfo = null, .prefix = "VM Executing" },
+                    .{ .debugInfo = null, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             }
             if (global_debug_level >= 2) {
-                self.stringTable.printTable("string intern");
-                self.globals.printTable("globals");
+                if (self.stringTable.count != string_count) {
+                    string_count = self.stringTable.count;
+                    self.stringTable.printTable("string intern");
+                }
+                if (self.globals.count != global_count) {
+                    global_count = self.globals.count;
+                    self.globals.printTable("globals");
+                }
             }
         }
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
@@ -293,6 +301,21 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 } else {
                     std.debug.print("Undefined: '{s}'\n", .{name.chars});
                     //TODO: Switch to error with context for runtime errors
+                    return RuntimeError.GlobalNotFound;
+                }
+            },
+            .SET_GLOBAL => {
+                const name_idx = self.readU16();
+                const name = (try self.chunk.constants.get(name_idx)).asObjString().?; // Safe
+                if (self.globals.get(name)) |defined_var| {
+                    const set_expr = try self.pop();
+                    if (defined_var.isEqual(&set_expr)) {
+                        // No change, skip
+                        continue;
+                    }
+                    _ = try self.globals.set(name, set_expr);
+                } else {
+                    std.debug.print("Undefined: '{s}'\n", .{name.chars});
                     return RuntimeError.GlobalNotFound;
                 }
             },

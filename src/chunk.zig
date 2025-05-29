@@ -127,7 +127,7 @@ pub const Chunk = struct {
                     @as(usize, self.code[offset + 2]) << 8 |
                     @as(usize, self.code[offset + 3]);
             },
-            .DEFINE_GLOBAL, .GET_GLOBAL => {
+            .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL => {
                 // Interpret the next 16 bytes as a usize (big-endian)
                 var usize_idx: usize = 0x00;
                 inline for (0..2) |i| {
