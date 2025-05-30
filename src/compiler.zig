@@ -1,5 +1,7 @@
 var debug_level: u8 = 0;
 var compilerStringTable: Table = undefined;
+var compilerConstantTable: Table = undefined;
+
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
     // For first byte, the line is fetched as parser.previous.line, so we need this
@@ -399,6 +401,8 @@ pub fn compile(
     parser.allocator = allocator;
     parser.vm = vm;
     compilerStringTable = Table.init(allocator);
+    compilerConstantTable = Table.initWithHashFn(allocator, .clhash);
+    defer compilerConstantTable.deinit();
     if (opts) |o| {
         if (o.debug) {
             // Allocate DebugInfo on the heap
