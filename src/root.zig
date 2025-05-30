@@ -32,12 +32,14 @@ pub const ClHash = if (hasClhash) struct {
 
     pub fn hash(key: []const u8) u64 {
         std.debug.assert(RANDOM != null);
+        std.debug.print("\n\n\n\nUsing CLHash for key: {s}\n", .{key});
         return clhash.clhash(RANDOM, key.ptr, key.len);
     }
 } else struct {
     pub fn init() void {}
-    pub fn hash(_: []const u8) u64 {
-        @compileError("CLHash not available (set has_clhash in build options)");
+    pub fn hash(s: []const u8) u64 {
+        std.debug.print("CLHash is not enabled, using fallback hash function.\n", .{});
+        return @import("table.zig").loxHash(s);
     }
 };
 
