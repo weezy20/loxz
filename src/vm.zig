@@ -117,6 +117,9 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
 }) InterpretResult {
     global_debug_level = opts.debug_level;
     self.chunk = chunk;
+    if (global_debug_level >= 2) {
+        chunk.print("Loaded chunk on VM");
+    }
     self.ip = chunk.code;
     if (opts.init_string_table) |t| {
         lib.tableAddAll(@constCast(t), &self.stringTable) catch |err| {

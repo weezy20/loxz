@@ -41,10 +41,10 @@ pub const Chunk = struct {
             dbg("0x{x},", .{byte});
         }
         dbg("]", .{});
-        // dbg("\nConstants:\n", .{});
-        // for (self.constants.values, 0..) |value, i| {
-        //     dbg("idx {d}: {any}, ", .{ i, value });
-        // }
+        dbg("\nConstants:\n", .{});
+        for (self.constants.values, 0..) |value, i| {
+            dbg("idx {d}: {any}, ", .{ i, value });
+        }
         dbg("\n", .{});
     }
 
