@@ -29,6 +29,24 @@ pub const Chunk = struct {
         self.constants.deinit(self.allocator.*);
         self.* = undefined; // Prevent's use after free during compilation
     }
+    /// Clone the chunk
+    pub fn clone(self: *const Chunk, allocator: *const Allocator) !Chunk {
+        var new_chunk = Chunk.init(allocator);
+        new_chunk.count = self.count;
+        new_chunk.capacity = self.capacity;
+        const new_mem = try self.allocator.alignedAlloc(u8, @alignOf(u8), self.capacity);
+
+        // Copy existing data if needed
+        if (self.count > 0) {
+            @memcpy(new_mem[0..self.count], self.code[0..self.count]);
+        }
+
+        new_chunk.constants = ValueArray.init() catch @panic("Failed to initialize ValueArray for Chunk");
+        for (self.constants.values[0..self.constants.count]) |val| {
+            try new_chunk.constants.write(val, allocator.*);
+        }
+        return new_chunk;
+    }
     /// Print raw bytecode
     pub fn print(self: *const Chunk, header: []const u8) void {
         if (self.count == 0) {

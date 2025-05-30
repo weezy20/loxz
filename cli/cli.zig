@@ -104,6 +104,9 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
     var multi_line = false;
     var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
+    var repl_chunk = lib.Chunk.init(&allocator);
+    const chunk_ptr = &repl_chunk;
+    defer chunk_ptr.deinit();
     while (true) {
         if (!multi_line) {
             try stdout.writeAll(">> ");
@@ -130,15 +133,40 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
             try stdout.writeAll("Exiting REPL. Goodbye!\n");
             return;
         }
+        const backup_chunk = try repl_chunk.clone(&allocator);
+        const compile_result = lib.compile(buffer.items, @constCast(chunk_ptr), &vm, allocator, .{
+            .debug = config.debug,
+            .debug_level = config.debug_level,
+            .repl_mode = true,
+        });
 
-        const result = interpret(buffer.items, config, allocator, &vm) catch |err| {
-            std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
-            buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
-            continue;
-        };
-        if (result != .ok) {
-            vm.resetStack();
-            lib.resetParser();
+        var compilerTable = compile_result.stringTable;
+        defer {
+            if (compile_result.debugInfo) |d| {
+                d.deinit();
+                allocator.destroy(d);
+            }
+        }
+        if (!compile_result.success) {
+            compilerTable.deinit();
+            chunk_ptr.* = backup_chunk; // Restore the chunk
+        }
+        const result = lib.interpret(&vm, &repl_chunk, .{
+            .stack_tracing = config.stack_tracing,
+            .debug_level = config.debug_level,
+            .debugInfo = compile_result.debugInfo,
+            .init_string_table = if (compilerTable.count > 0) &compilerTable else null,
+        });
+        switch (result) {
+            .ok => {
+                // Do nothing, just continue
+            },
+            .runtime_error => {
+                try stdout.writeAll("Runtime error occurred.\n");
+            },
+            .compile_error => {
+                try stdout.writeAll("Compilation error occurred.\n");
+            },
         }
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
