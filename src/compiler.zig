@@ -401,7 +401,7 @@ pub fn compile(
     parser.allocator = allocator;
     parser.vm = vm;
     compilerStringTable = Table.init(allocator);
-    compilerConstantTable = Table.initWithHashFn(allocator, .clhash);
+    compilerConstantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
     defer compilerConstantTable.deinit();
     if (opts) |o| {
         if (o.debug) {
@@ -461,6 +461,7 @@ const HEAP_FAIL = "fatal: failed to heap allocate";
 const CompilerError = @import("error.zig").CompilerError;
 const Table = @import("table.zig").Table;
 const VM = @import("vm.zig").VM;
+const lib = @import("root.zig");
 
 /// Lowest to highest precedence
 const Precedence = enum {
