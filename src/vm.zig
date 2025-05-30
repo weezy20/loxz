@@ -22,6 +22,41 @@ objects: ?*Object = null,
 stringTable: Table,
 /// Global variables
 globals: Table,
+/// Cache for global variables
+globalCache: GlobalCache,
+
+const GlobalCache = struct {
+    const GlobalCacheEntry = struct {
+        name: ?*ObjString = null,
+        value: Value = .Nil,
+        is_defined: bool = false,
+    };
+    const GlobalCacheSize: comptime_int = 1 << 8;
+    const GlobalCacheMask: comptime_int = GlobalCacheSize - 1; // 0xFF
+    entries: []GlobalCacheEntry = undefined,
+
+    fn init() GlobalCache {
+        return GlobalCache{
+            .entries = [_]GlobalCacheEntry{.{ .name = null, .value = .Nil, .is_defined = false } ** GlobalCacheSize},
+        };
+    }
+    fn lookup(self: *GlobalCache, name: *ObjString) ?Value {
+        const index = @as(usize, name.hash) & GlobalCacheMask;
+        const entry = self.entries[index];
+        if (entry.name == name) {
+            return entry.value;
+        }
+        return null;
+    }
+    fn set(self: *GlobalCache, name: *ObjString, value: Value) void {
+        const index = @as(usize, name.hash) & GlobalCacheMask;
+        self.entries[index] = GlobalCacheEntry{
+            .name = name,
+            .value = value,
+            .is_defined = true,
+        };
+    }
+};
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
@@ -36,6 +71,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .stackTop = stackInit,
         .stringTable = Table.init(allocator),
         .globals = Table.init(allocator),
+        .globalCache = GlobalCache.init(),
     };
 }
 pub fn deinitVM(self: *VM) void {
@@ -74,6 +110,7 @@ pub fn freeObjects(self: *VM) void {
 
 pub fn resetStack(self: *VM) void {
     self.stackTop = self.stack;
+    self.globalCache = GlobalCache.init();
 }
 fn printStack(self: *VM) void {
     // ANSI escape for bold red: \x1b[1;31m, reset: \x1b[0m
@@ -372,6 +409,7 @@ const DebugInfo = lib.DebugInfo;
 const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
+const ObjString = lib.ObjString;
 const Table = lib.Table;
 
 fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
