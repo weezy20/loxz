@@ -13,7 +13,8 @@
 
 
 var breakfast = "beignets";
+breakfast = "oops woke up late, anyways eating ";
 var beverage = "cafe au lait";
-breakfast = "beignets with " + beverage;
+breakfast = breakfast + "beignets with " + beverage;
 
 print breakfast;

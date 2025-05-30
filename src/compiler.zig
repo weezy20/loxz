@@ -277,14 +277,20 @@ fn statement() void {
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
 fn identifierConstant(token: *const Token, intern_table: *Table) usize {
-    const obj = (Object.newString(
+    const obj_intern = (Object.newString(
         parser.vm,
         &[_][]const u8{token.lexeme},
         intern_table,
-    ) catch @panic(HEAP_FAIL)).obj;
-    return makeConstant(
-        Value{ .Obj = obj },
-    );
+    ) catch @panic(HEAP_FAIL));
+    const obj, _ = .{ obj_intern.obj, obj_intern.interned };
+    const index_at_table = compilerConstantTable.get(obj.asObjString().?);
+    if (index_at_table) |present| {
+        return @intFromFloat(present.asNumber().?);
+    }
+    const index = makeConstant(Value{ .Obj = obj });
+    const isNewKey = compilerConstantTable.set(obj.asObjString().?, Value{ .Number = @floatFromInt(index) }) catch @panic("Out of memory interning string constant");
+    std.debug.assert(isNewKey);
+    return index;
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
