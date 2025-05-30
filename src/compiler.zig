@@ -408,8 +408,9 @@ pub fn compile(
     parser.vm = vm;
     compilerStringTable = Table.init(allocator);
     // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
-    // but should be cleared up in the future.
-    compilerConstantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
+    // but should be cleared up in the future. For now we just stick to the defaults...
+    // compilerConstantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
+    compilerConstantTable = Table.initWithHashFn(allocator, .default); // Use same hash across table/objstring
     defer compilerConstantTable.deinit();
     if (opts) |o| {
         if (o.debug) {
