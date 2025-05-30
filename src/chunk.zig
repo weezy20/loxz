@@ -107,7 +107,7 @@ pub const Chunk = struct {
         value: Value,
     ) !usize {
         const index = self.constants.count;
-        if (index >= (1 << 16)) {
+        if (index >= 1 << 16) {
             return error.Exceed16BitsIndex;
         }
         // Write the constant to ValueArray

@@ -6,10 +6,10 @@
 // a = 3;
 // print a;
 
-var a = 2; var b = 3; var c = 5; var d = 10;
-
-a * b = c + d;
-print b;
+// var a = 2; var b = 3; var c = 5; var d = 10;
+// 
+// a * b = c + d;
+// print b;
 
 
 var breakfast = "beignets";
