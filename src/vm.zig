@@ -209,7 +209,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .NEGATE => {
                 const value: [*]Value = self.stackTop - 1; // Autoscales ptr arithmetic based on @sizeOf(T) for [*]T
-                if (value[0].isNumber()) |num| {
+                if (value[0].asNumber()) |num| {
                     value[0] = Value{ .Number = -num };
                 } else {
                     return RuntimeError.NaN;
@@ -227,7 +227,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     try self.push(Value{ .Obj = o.obj });
                     break :add;
                 };
-                if (self.peek(0).isNumber()) |rhs| if (self.peek(1).isNumber()) |lhs| {
+                if (self.peek(0).asNumber()) |rhs| if (self.peek(1).asNumber()) |lhs| {
                     _ = try self.pop();
                     _ = try self.pop();
                     try self.pushNumber(add(lhs, rhs));
@@ -340,7 +340,7 @@ fn peek(self: *VM, distance: usize) Value {
 
 inline fn popNumber(self: *VM) RuntimeError!f64 {
     const value = try self.pop();
-    if (value.isNumber()) |num| {
+    if (value.asNumber()) |num| {
         return num;
     } else {
         return RuntimeError.NaN;

@@ -11,6 +11,7 @@ pub const Table = struct {
     count: usize, // entries + tombstones
     capacity: usize,
     entries: []align(8) Entry,
+    hash_fn: *const fn ([]const u8) u64 = loxHash,
 
     pub fn init(allocator: std.mem.Allocator) Table {
         return Table{
@@ -18,6 +19,18 @@ pub const Table = struct {
             .count = 0,
             .capacity = 0,
             .entries = undefined,
+        };
+    }
+    pub fn initWithHashFn(allocator: std.mem.Allocator, hash_fn: enum { clhash, loxhash, default }) Table {
+        return Table{
+            .allocator = allocator,
+            .count = 0,
+            .capacity = 0,
+            .entries = undefined,
+            .hash_fn = switch (hash_fn) {
+                .clhash => clhash,
+                .default, .loxhash => loxHash,
+            },
         };
     }
     pub fn deinit(self: *Table) void {
@@ -127,7 +140,7 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
 }
 pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
     if (table.count == 0) return null;
-    const hashcode = hasher(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
+    const hashcode = table.hash_fn(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
     var idx = hashcode % table.capacity;
     while (true) : (idx = @mod(idx + 1, table.capacity)) {
         const e = &table.entries[idx];
