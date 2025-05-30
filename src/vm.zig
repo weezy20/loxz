@@ -33,27 +33,29 @@ const GlobalCache = struct {
     };
     const GlobalCacheSize: comptime_int = 1 << 8;
     const GlobalCacheMask: comptime_int = GlobalCacheSize - 1; // 0xFF
-    entries: []GlobalCacheEntry = undefined,
+    entries: [GlobalCacheSize]GlobalCacheEntry,
 
     fn init() GlobalCache {
         return GlobalCache{
-            .entries = [_]GlobalCacheEntry{.{ .name = null, .value = .Nil, .is_defined = false } ** GlobalCacheSize},
+            // @splat essentially is [_]GlobalCacheEntry{.{ .name = null, .value = .Nil, .is_defined = false }} ** GlobalCacheSize,
+            .entries = @splat(.{ .name = null, .value = .Nil, .is_defined = false }),
         };
     }
     fn lookup(self: *GlobalCache, name: *ObjString) ?Value {
         const index = @as(usize, name.hash) & GlobalCacheMask;
         const entry = self.entries[index];
-        if (entry.name == name) {
+        if (entry.name != null and entry.name.? == name and entry.is_defined) {
             return entry.value;
         }
+        // In case of a collision we reach here and return null
         return null;
     }
-    fn set(self: *GlobalCache, name: *ObjString, value: Value) void {
+    fn set(self: *GlobalCache, name: *ObjString, value: Value, is_defined: bool) void {
         const index = @as(usize, name.hash) & GlobalCacheMask;
         self.entries[index] = GlobalCacheEntry{
             .name = name,
             .value = value,
-            .is_defined = true,
+            .is_defined = is_defined,
         };
     }
 };
@@ -332,19 +334,25 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const name_val = try self.chunk.constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
-                _ = try self.pop();
+                const val = try self.pop();
+                self.globalCache.set(name, val, true);
             },
             .GET_GLOBAL => {
                 const name_idx = self.readU16();
                 const name_val = try self.chunk.constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
-                if (self.globals.get(name)) |value| {
+                if (self.globalCache.lookup(name)) |value| {
                     try self.push(value);
                 } else {
-                    // Call runtimeError with format string and args
-                    self.runtimeError("Undefined global variable: '{s}'", .{name.chars});
-                    //TODO: Switch to error with context for runtime errors
-                    return RuntimeError.GlobalNotFound;
+                    if (self.globals.get(name)) |value| {
+                        try self.push(value);
+                        self.globalCache.set(name, value, true);
+                    } else {
+                        // Call runtimeError with format string and args
+                        self.runtimeError("Undefined global variable: '{s}'", .{name.chars});
+                        //TODO: Switch to error with context for runtime errors
+                        return RuntimeError.GlobalNotFound;
+                    }
                 }
             },
             .SET_GLOBAL => {
@@ -356,6 +364,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.runtimeError("Assignment of undefined global variable: '{s}'", .{name.chars});
                     return RuntimeError.GlobalNotFound;
                 }
+                self.globalCache.set(name, self.peek(0), true);
             },
         }
     }
