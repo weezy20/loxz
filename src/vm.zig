@@ -45,6 +45,9 @@ const GlobalCache = struct {
         const index = @as(usize, name.hash) & GlobalCacheMask;
         const entry = self.entries[index];
         if (entry.name != null and entry.name.? == name and entry.is_defined) {
+            if (global_debug_level >= 2) {
+                std.debug.print("GlobalCache hit for '{s}' at index {d}\n", .{ name.chars, index });
+            }
             return entry.value;
         }
         // In case of a collision we reach here and return null
