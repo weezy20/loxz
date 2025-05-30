@@ -150,6 +150,8 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
         if (!compile_result.success) {
             compilerTable.deinit();
             chunk_ptr.* = backup_chunk; // Restore the chunk
+            buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
+            continue;
         }
         const result = lib.interpret(&vm, &repl_chunk, .{
             .stack_tracing = config.stack_tracing,

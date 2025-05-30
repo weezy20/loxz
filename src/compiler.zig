@@ -432,7 +432,9 @@ pub fn compile(
     while (!match(TokenType.Eof)) {
         declaration();
     }
-    endCompiler(allocator) catch |err| {
+    if (debug_level > 0) currentChunk().disassemble(allocator, "code", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+
+    if (opts) |o| if (o.repl_mode) endCompiler() catch |err| {
         return .{
             .success = !parser.had_error,
             .debugInfo = parser.debugInfo,
@@ -448,8 +450,7 @@ pub fn compile(
     };
 }
 /// `allocator` is only used in debug mode
-inline fn endCompiler(allocator: std.mem.Allocator) !void {
-    if (debug_level > 0) currentChunk().disassemble(allocator, "code", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+inline fn endCompiler() !void {
     try emitReturn();
 }
 inline fn emitReturn() !void {
