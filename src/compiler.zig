@@ -1,6 +1,4 @@
 var debug_level: u8 = 0;
-var compilerStringTable: Table = undefined;
-var compilerConstantTable: Table = undefined;
 
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
@@ -591,4 +589,19 @@ const CompilationResult = struct {
     debugInfo: ?*DebugInfo,
     err: ?CompilerError,
     stringTable: Table,
+};
+
+var compilerStringTable: Table = undefined;
+var compilerConstantTable: Table = undefined;
+
+const LOCAL_COUNT: usize = 1 << 16; // We are using 16 bits for variable indices.
+pub const Compiler = struct {
+    locals: [LOCAL_COUNT]Local,
+    localCount: usize,
+    scopeDepth: usize,
+};
+
+pub const Local = struct {
+    name: Token,
+    depth: usize,
 };
