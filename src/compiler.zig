@@ -140,13 +140,24 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    // Fetch the variable's index in the chunk constant pool
-    const arg: usize = identifierConstant(&name, intern_table);
+    var getOp: op, var setOp: op = .{ op.GET_GLOBAL, op.SET_GLOBAL };
+    var arg: isize = cc.resolveLocal(&name);
+
+    if (arg != -1) {
+        getOp = op.GET_LOCAL;
+        setOp = op.SET_LOCAL;
+    } else {
+        // If the variable is not found in the locals, it must be a global variable
+        // Fetch the variable's index in the chunk constant pool
+        // Safe as the index returned is within u16 range
+        arg = @as(isize, identifierConstant(&name, intern_table));
+    }
+    const uarg: usize = @intCast(arg);
     if (canAssign and match(TokenType.Equal)) {
         expression();
-        emitU16Op(op.SET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
+        emitU16Op(setOp, uarg) catch @panic(BYTECODE_FAIL);
     } else {
-        emitU16Op(op.GET_GLOBAL, arg) catch @panic(BYTECODE_FAIL);
+        emitU16Op(getOp, uarg) catch @panic(BYTECODE_FAIL);
     }
 }
 /// Emit a string
@@ -695,6 +706,17 @@ pub const Compiler = struct {
         self.stringTable.deinit();
         self.constantTable.deinit();
         self.* = undefined;
+    }
+    fn resolveLocal(self: *Compiler, name: *const Token) isize {
+        if (self.localCount == 0) return -1; // No locals in the current scope
+        var i: usize = self.localCount - 1; // Safe
+        while (i >= 0) : (i -= 1) {
+            const local = &self.locals[i];
+            if (identifiersEqual(&local.name, name)) {
+                return @intCast(i);
+            }
+        }
+        return -1;
     }
 };
 
