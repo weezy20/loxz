@@ -331,10 +331,16 @@ inline fn addLocal(name: *const Token) void {
     }
     cc.locals[cc.localCount] = Local{
         .name = name.*,
-        .depth = cc.scopeDepth,
+        .depth = @intCast(cc.scopeDepth), // Safe: we don't expect a nesting depth greater than 2^31
     };
     cc.localCount += 1;
 }
+/// Lox allows variable shadowing but within the same scope, it's an error.
+/// var a = 1;      // Outer scope
+/// {
+///     var a = 2;  // ✅ Allowed (shadowing)
+///     var a = 3;  // ❌ Error (redeclaration in same scope)
+/// }
 fn declareVariable() void {
     if (cc.scopeDepth == 0) return; // Global variable, no need to declare
     if (cc.localCount >= LOCAL_COUNT) {
@@ -342,11 +348,29 @@ fn declareVariable() void {
         return;
     }
     const name = parser.previous;
+    // Detect if the variable is already declared in the current scope
+    var i: isize = if (cc.localCount == 0) -1 else @intCast(cc.localCount - 1);
+    while (i >= 0) : (i -= 1) {
+        const local = &cc.locals[@intCast(i)];
+        // If we encounter a variable from an outer scope (depth < cc.scopeDepth), we stop checking further to enable shadowed var declaration.
+        if (local.depth != -1 and local.depth < cc.scopeDepth) {
+            break;
+        }
+        // cc.scopeDepth == local.depth here, and it is an error to shadow a variable in the same scope.
+        // Invariant: local.depth ≤ cc.scopeDepth because cc.scopeDepth is tracking the inner most scope.
+        if (identifiersEqual(&name, &local.name)) {
+            Error("Already a variable with this name in this scope.");
+        }
+    }
     addLocal(&name);
+}
+// Compare the lexemes of the two tokens
+fn identifiersEqual(a: *const Token, b: *const Token) bool {
+    return std.mem.eql(u8, a.lexeme, b.lexeme);
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
-    declareVariable();
+    declareVariable(); // Entry point for local variable declaration
     if (cc.scopeDepth > 0) return 0;
 
     //TODO: If error this still proceeds silently.. fix
@@ -676,5 +700,5 @@ pub const Compiler = struct {
 
 pub const Local = struct {
     name: Token,
-    depth: usize,
+    depth: isize,
 };
