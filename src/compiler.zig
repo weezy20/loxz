@@ -405,6 +405,7 @@ pub fn compile(
     cc = compiler; // Set the global compiler instance
     parser.allocator = allocator;
     parser.vm = vm;
+    parser.scanner = Scanner.init(source);
     if (opts) |o| {
         if (o.debug) {
             // Allocate DebugInfo on the heap
@@ -420,7 +421,6 @@ pub fn compile(
         if (o.debug_level) |lvl| debug_level = lvl;
         parser.repl_mode = o.repl_mode;
     }
-    parser.scanner = Scanner.init(source);
     advance();
     while (!match(TokenType.Eof)) {
         declaration();
