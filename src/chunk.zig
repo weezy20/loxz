@@ -36,14 +36,14 @@ pub const Chunk = struct {
             return;
         }
         dbg("{s} -- Chunk: {d} bytes, {d} constants\n", .{ header, self.count, self.constants.count });
-        dbg("Code begin: [", .{});
+        dbg("\tCode begin: [", .{});
         for (self.code[0..self.count]) |byte| {
             dbg("0x{x},", .{byte});
         }
         dbg("]", .{});
-        dbg("\nConstants:\n", .{});
+        dbg("\n\tConstants: ", .{});
         for (self.constants.values[0..self.constants.count], 0..) |value, i| {
-            dbg("idx {d}: {any}, ", .{ i, value });
+            dbg("(idx {d}: {any}), ", .{ i, value });
         }
         dbg("\n", .{});
     }

@@ -97,7 +97,7 @@ pub const Table = struct {
 
         for (self.entries, 0..) |entry, index| {
             if (entry.key) |k| {
-                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}\n", .{ index, k, k.chars, entry.value.? });
+                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}, refcount : {d}\n", .{ index, k, k.chars, entry.value.?, k.refcount });
             } else if (entry.value) |v| {
                 std.debug.print("{}  Tombstone with value: {any}\n", .{ index, v });
             } else {
