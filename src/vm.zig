@@ -167,7 +167,6 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
         lib.tableAddAll(@constCast(t), &self.stringTable) catch |err| {
             std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
         };
-        t.deinit();
     }
     if (opts.debugInfo) |d| {
         self.debugInfo = d;

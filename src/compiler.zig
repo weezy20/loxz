@@ -1,5 +1,6 @@
 var debug_level: u8 = 0;
-
+// Current compiler global
+var cc: *Compiler = undefined;
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
     // For first byte, the line is fetched as parser.previous.line, so we need this
@@ -135,7 +136,7 @@ fn variable() void {
     namedVariable(
         parser.previous,
         parser.canAssign.?,
-        &compilerStringTable,
+        &cc.stringTable,
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
@@ -156,7 +157,7 @@ fn string() void {
         const objstr = Object.newString(
             parser.vm,
             &[_][]const u8{str},
-            &compilerStringTable,
+            &cc.stringTable,
         ) catch @panic(HEAP_FAIL);
         // In REPL mode, we need to allocate the string as the line buffer will get deallocated
         break :b Value{ .Obj = objstr.obj };
@@ -281,12 +282,12 @@ fn identifierConstant(token: *const Token, intern_table: *Table) usize {
         intern_table,
     ) catch @panic(HEAP_FAIL));
     const obj, _ = .{ obj_intern.obj, obj_intern.interned };
-    const index_at_table = compilerConstantTable.get(obj.asObjString().?);
+    const index_at_table = cc.constantTable.get(obj.asObjString().?);
     if (index_at_table) |present| {
         return @intFromFloat(present.asNumber().?);
     }
     const index = makeConstant(Value{ .Obj = obj });
-    const isNewKey = compilerConstantTable.set(obj.asObjString().?, Value{ .Number = @floatFromInt(index) }) catch @panic("Out of memory interning string constant");
+    const isNewKey = cc.constantTable.set(obj.asObjString().?, Value{ .Number = @floatFromInt(index) }) catch @panic("Out of memory interning string constant");
     std.debug.assert(isNewKey);
     return index;
 }
@@ -296,7 +297,7 @@ fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
-    const global: usize = parseVariable("Expect variable name.", &compilerStringTable);
+    const global: usize = parseVariable("Expect variable name.", &cc.stringTable);
     if (global > std.math.maxInt(u16)) {
         Error("Cannot declare more than 65535 variables in a single function");
         return;
@@ -347,7 +348,7 @@ fn makeConstant(value: Value) usize {
     return currentChunk().writeU16Constant(value) catch @panic("developer: propagate this error up");
 }
 inline fn currentChunk() *Chunk {
-    return compilingChunk;
+    return cc.compilingChunk;
 }
 /// Report error at current token
 fn ErrorAtCurrent(msg: ?[]const u8) void {
@@ -391,8 +392,8 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     try stderr.writeAll("\n");
 }
 pub fn compile(
+    compiler: *Compiler,
     source: []const u8,
-    chunk: *Chunk,
     vm: *VM,
     allocator: std.mem.Allocator,
     opts: ?struct {
@@ -401,15 +402,9 @@ pub fn compile(
         repl_mode: bool,
     },
 ) CompilationResult {
-    compilingChunk = chunk;
+    cc = compiler; // Set the global compiler instance
     parser.allocator = allocator;
     parser.vm = vm;
-    compilerStringTable = Table.init(allocator);
-    // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
-    // but should be cleared up in the future. For now we just stick to the defaults...
-    // compilerConstantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
-    compilerConstantTable = Table.initWithHashFn(allocator, .default); // Use same hash across table/objstring
-    defer compilerConstantTable.deinit();
     if (opts) |o| {
         if (o.debug) {
             // Allocate DebugInfo on the heap
@@ -430,20 +425,15 @@ pub fn compile(
     while (!match(TokenType.Eof)) {
         declaration();
     }
-    endCompiler(allocator) catch |err| {
-        return .{
-            .success = !parser.had_error,
-            .debugInfo = parser.debugInfo,
-            .err = err,
-            .stringTable = compilerStringTable,
-        };
-    };
-    return .{
+    var retval: CompilationResult = .{
         .success = !parser.had_error,
         .debugInfo = parser.debugInfo,
         .err = null,
-        .stringTable = compilerStringTable,
     };
+    endCompiler(allocator) catch |err| {
+        retval.err = err;
+    };
+    return retval;
 }
 /// `allocator` is only used in debug mode
 inline fn endCompiler(allocator: std.mem.Allocator) !void {
@@ -588,17 +578,43 @@ const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
     err: ?CompilerError,
-    stringTable: Table,
 };
 
-var compilerStringTable: Table = undefined;
-var compilerConstantTable: Table = undefined;
-
 const LOCAL_COUNT: usize = 1 << 16; // We are using 16 bits for variable indices.
+
 pub const Compiler = struct {
     locals: [LOCAL_COUNT]Local,
+    /// Number of locals in current scope
     localCount: usize,
+    /// Number of blocks surrounding current code block
     scopeDepth: usize,
+    /// Compiler constant Table
+    constantTable: Table,
+    /// Compiler string table
+    stringTable: Table,
+    /// Current chunk being compiled
+    compilingChunk: *Chunk,
+
+    // Use same hash across table/objstring,
+    // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
+    // but should be cleared up in the future. For now we just stick to the defaults...
+    // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
+
+    pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
+        return .{
+            .locals = undefined,
+            .localCount = 0,
+            .scopeDepth = 0,
+            .stringTable = Table.init(allocator),
+            .constantTable = Table.initWithHashFn(allocator, .default),
+            .compilingChunk = chunk,
+        };
+    }
+    pub fn deinit(self: *@This()) void {
+        self.stringTable.deinit();
+        self.constantTable.deinit();
+        self.* = undefined;
+    }
 };
 
 pub const Local = struct {
