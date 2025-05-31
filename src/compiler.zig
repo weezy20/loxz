@@ -266,11 +266,44 @@ fn expressionStatement() void {
     consume(TokenType.Semicolon, "Expect ';' after expression.");
     emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
 }
+fn beginScope() void {
+    cc.scopeDepth += 1;
+}
+fn block() void {
+    // A block is a sequence of statements enclosed in braces
+    while (!check(TokenType.RightBrace) and !check(TokenType.Eof)) {
+        declaration();
+    }
+    consume(TokenType.RightBrace, "Expect '}' after block.");
+}
+fn endScope() void {
+    // Decrease the scope depth, popping all locals in the current scope
+    cc.scopeDepth -= 1;
+    // Pop all locals in the current scope
+    while (cc.localCount > 0 and cc.locals[cc.localCount - 1].depth > cc.scopeDepth) {
+        cc.localCount -= 1;
+        emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
+    }
+}
 /// Parse a statement
+/// statement      → exprStmt
+///               | printStmt
+///               | block ;
 fn statement() void {
-    if (match(TokenType.Print)) {
+    if (match(TokenType.Print)) { // print statement
         printStatement();
-    } else {
+    } else if (match(TokenType.LeftBrace)) { // block
+        // Block statement
+        // cc.scopeDepth += 1;
+        // while (!check(TokenType.RightBrace) and !check(TokenType.Eof)) {
+        //     declaration();
+        // }
+        // consume(TokenType.RightBrace, "Expect '}' after block.");
+        // cc.scopeDepth -= 1;
+        beginScope();
+        block();
+        endScope();
+    } else { // expression statement
         expressionStatement();
     }
 }
@@ -291,8 +324,31 @@ fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     std.debug.assert(isNewKey);
     return index;
 }
+inline fn addLocal(name: *const Token) void {
+    if (cc.localCount >= LOCAL_COUNT) {
+        Error("Too many local variables in function.");
+        return;
+    }
+    cc.locals[cc.localCount] = Local{
+        .name = name.*,
+        .depth = cc.scopeDepth,
+    };
+    cc.localCount += 1;
+}
+fn declareVariable() void {
+    if (cc.scopeDepth == 0) return; // Global variable, no need to declare
+    if (cc.localCount >= LOCAL_COUNT) {
+        Error("Too many local variables in function.");
+        return;
+    }
+    const name = parser.previous;
+    addLocal(&name);
+}
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
+    declareVariable();
+    if (cc.scopeDepth > 0) return 0;
+
     //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);
 }
@@ -312,6 +368,7 @@ fn varDeclaration() void {
     defineVariable(global);
 }
 fn defineVariable(global: usize) void {
+    if (cc.scopeDepth > 0) return; // Local variable initializer value is already sitting in the stack
     emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
