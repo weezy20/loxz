@@ -349,7 +349,7 @@ inline fn addLocal(name: *const Token) void {
     }
     cc.locals[cc.localCount] = Local{
         .name = name.*,
-        .depth = @intCast(cc.scopeDepth), // Safe: we don't expect a nesting depth greater than 2^31
+        .depth = -1,
     };
     cc.localCount += 1;
 }
@@ -410,13 +410,22 @@ fn varDeclaration() void {
     defineVariable(global);
 }
 fn defineVariable(global: usize) void {
-    if (cc.scopeDepth > 0) return; // Local variable initializer value is already sitting in the stack
+    if (cc.scopeDepth > 0) {
+        markInitialized();
+        return;
+    }
     emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
     if (match(TokenType.Var)) varDeclaration() else statement();
     if (parser.panic_mode) synchronize();
+}
+/// Mark the last local variable as initialized.
+/// Declaring” is when the variable is added to the scope
+fn markInitialized() void {
+    if (cc.localCount == 0) return; // No locals in the current scope
+    cc.locals[cc.localCount - 1].depth = @intCast(cc.scopeDepth); // Safe: we don't expect a nesting depth greater than 2^31
 }
 fn synchronize() void {
     parser.panic_mode = false;
@@ -720,6 +729,10 @@ pub const Compiler = struct {
         while (i >= 0) : (i -= 1) {
             const local = &self.locals[i];
             if (identifiersEqual(&local.name, name)) {
+                if (local.depth == -1) {
+                    Error("Cannot read local variable in its own initializer.");
+                    return -1;
+                }
                 return @intCast(i);
             }
             if (i == 0) break;
