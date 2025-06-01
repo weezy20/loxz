@@ -1,0 +1,14 @@
+var global = "global";
+print global; // Expected: global
+
+{
+  var local = "local_in_block";
+  print local;  // Expected: local_in_block
+  print global; // Expected: global
+
+  var global = "shadowed_global"; // Shadows global
+  print global; // Expected: shadowed_global
+}
+
+print global; // Expected: global (shadow is gone)
+print local; // Would be an error
