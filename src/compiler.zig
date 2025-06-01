@@ -148,9 +148,9 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
         const uarg: u8 = @intCast(arg); // u8 limit for locals
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitBytes(@intFromEnum(op.SET_LOCAL), uarg) catch @panic(BYTECODE_FAIL);
+            emitBytes(&.{ @intFromEnum(op.SET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
         } else {
-            emitBytes(@intFromEnum(op.GET_LOCAL), uarg) catch @panic(BYTECODE_FAIL);
+            emitBytes(&.{ @intFromEnum(op.GET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
         }
     } else {
         // If the variable is not found in the locals, it must be a global variable
@@ -343,7 +343,7 @@ fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     return index;
 }
 inline fn addLocal(name: *const Token) void {
-    if (cc.localCount >= LOCAL_COUNT) {
+    if (@as(usize, cc.localCount) == LOCAL_COUNT - 1) {
         Error("Too many local variables in function.");
         return;
     }
@@ -722,6 +722,7 @@ pub const Compiler = struct {
             if (identifiersEqual(&local.name, name)) {
                 return @intCast(i);
             }
+            if (i == 0) break;
         }
         return -1;
     }

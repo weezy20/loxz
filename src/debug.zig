@@ -52,8 +52,11 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .DEFINE_GLOBAL => return constantU16Instruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
         .GET_GLOBAL => return constantU16Instruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
         .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),
-        // .SET_LOCAL => todo!();
-        // .GET_LOCAL => todo!();
+        .GET_LOCAL => return byteInstruction("OP_GET_LOCAL", chunk, byte_offset, src_info),
+        .SET_LOCAL => return byteInstruction("OP_SET_LOCAL", chunk, byte_offset, src_info),
+        // else => {chunk,
+        //     return 0;
+        // },
     }
 }
 
@@ -97,6 +100,14 @@ fn constantLongInstruction(name: []const u8, chunk: *const Chunk, offset: usize,
     };
 
     return offset + 4; // 1 for opcode, 3 for u24 index
+}
+
+fn byteInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const slot: u8 = chunk.code[offset + 1];
+    stderr.print("{0s} (local idx : {1d}_u8)\t{2s}\n", .{ name, slot, src_info }) catch {
+        dbg("Failed to print local index", .{});
+    };
+    return offset + 2;
 }
 
 /// Location for chunk bytecode

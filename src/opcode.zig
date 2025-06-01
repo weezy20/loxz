@@ -1,7 +1,7 @@
 pub const OpCode = enum(u8) {
     RETURN = 0x00,
-    CONSTANT = 0x01,
-    CONSTANT_LONG = 0x02,
+    CONSTANT,
+    CONSTANT_LONG,
     NEGATE,
     // Arithmetic OPs
     ADD,
@@ -22,9 +22,11 @@ pub const OpCode = enum(u8) {
     GREATER, // a <= b is !(a > b)
     PRINT,
     POP,
+    // Globals
     DEFINE_GLOBAL,
     GET_GLOBAL,
     SET_GLOBAL,
+    // Locals
     GET_LOCAL,
     SET_LOCAL,
 };
