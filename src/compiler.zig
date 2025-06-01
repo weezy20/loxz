@@ -89,6 +89,9 @@ fn emitByte(byte: u8) CompilerError!void {
         };
     }
 }
+fn emitBytes(bytes: []const u8) !void {
+    for (bytes) |b| try currentChunk().write(b);
+}
 fn emitConstant(value: Value) !void {
     _ = try currentChunk().writeConstant(
         value,
@@ -112,8 +115,8 @@ const emit = struct {
     fn byte(b: op) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
-    fn bytes(ops: []const op) void {
-        for (ops) |b| emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
+    fn ops(opcodes: []const op) void {
+        for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
     }
 };
 
@@ -140,24 +143,27 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    var getOp: op, var setOp: op = .{ op.GET_GLOBAL, op.SET_GLOBAL };
-    var arg: isize = cc.resolveLocal(&name);
-
+    const arg: isize = cc.resolveLocal(&name);
     if (arg != -1) {
-        getOp = op.GET_LOCAL;
-        setOp = op.SET_LOCAL;
+        const uarg: u8 = @intCast(arg); // u8 limit for locals
+        if (canAssign and match(TokenType.Equal)) {
+            expression();
+            emitBytes(@intFromEnum(op.SET_LOCAL), uarg) catch @panic(BYTECODE_FAIL);
+        } else {
+            emitBytes(@intFromEnum(op.GET_LOCAL), uarg) catch @panic(BYTECODE_FAIL);
+        }
     } else {
         // If the variable is not found in the locals, it must be a global variable
         // Fetch the variable's index in the chunk constant pool
         // Safe as the index returned is within u16 range
-        arg = @as(isize, identifierConstant(&name, intern_table));
-    }
-    const uarg: usize = @intCast(arg);
-    if (canAssign and match(TokenType.Equal)) {
-        expression();
-        emitU16Op(setOp, uarg) catch @panic(BYTECODE_FAIL);
-    } else {
-        emitU16Op(getOp, uarg) catch @panic(BYTECODE_FAIL);
+        const uarg = identifierConstant(&name, intern_table);
+        if (canAssign and match(TokenType.Equal)) {
+            expression();
+            emitU16Op(op.SET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+        } else {
+            emitU16Op(op.GET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+        }
+        return;
     }
 }
 /// Emit a string
@@ -209,12 +215,12 @@ fn binary() void {
         .Star => emit.byte(op.MULTIPLY),
         .Slash => emit.byte(op.DIVIDE),
         // Logical infix expression
-        .BangEqual => emit.bytes(&.{ op.EQUAL, op.NOT }),
+        .BangEqual => emit.ops(&.{ op.EQUAL, op.NOT }),
         .EqualEqual => emit.byte(op.EQUAL),
         .Greater => emit.byte(op.GREATER),
-        .GreaterEqual => emit.bytes(&.{ op.LESS, op.NOT }),
+        .GreaterEqual => emit.ops(&.{ op.LESS, op.NOT }),
         .Less => emit.byte(op.LESS),
-        .LessEqual => emit.bytes(&.{ op.GREATER, op.NOT }),
+        .LessEqual => emit.ops(&.{ op.GREATER, op.NOT }),
         else => return, // Unreachable
     }
 }
@@ -319,6 +325,7 @@ fn statement() void {
     }
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
+/// index is u16
 fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     const obj_intern = (Object.newString(
         parser.vm,
@@ -672,12 +679,12 @@ const CompilationResult = struct {
     err: ?CompilerError,
 };
 
-const LOCAL_COUNT: usize = 1 << 16; // We are using 16 bits for variable indices.
+const LOCAL_COUNT: usize = 256; // Sticking to clox specs
 
 pub const Compiler = struct {
     locals: [LOCAL_COUNT]Local,
     /// Number of locals in current scope
-    localCount: usize,
+    localCount: u8,
     /// Number of blocks surrounding current code block
     scopeDepth: usize,
     /// Compiler constant Table
