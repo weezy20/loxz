@@ -15,10 +15,15 @@ pub const Object = struct {
         // Array: *Array,
 
         pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-            _ = fmt;
             _ = options;
             switch (self) {
-                .String => |s| try writer.print("Object string: [\"{s}\"]", .{s.chars}),
+                .String => |s| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.writeAll(s.chars);
+                    } else { // Debug mode: `{}`
+                        try writer.print("Object string: [\"{s}\"]", .{s.chars});
+                    }
+                },
             }
         }
     };
@@ -27,12 +32,15 @@ pub const Object = struct {
         try self.data.format(fmt, options, writer);
     }
 
-    pub fn newString(allocator: Allocator, strings: []const []const u8, intern_table: ?*Table) !struct {
+    pub fn newString(vm: *VM, strings: []const []const u8, intern_table: ?*Table) !struct {
         obj: *Object,
         interned: bool,
     } {
+        const allocator = vm.allocator;
         var obj_string: *ObjString = undefined;
         var interned: bool = false;
+
+        // single string
         if (strings.len == 1) top: {
             if (intern_table) |t| {
                 if (tableFindString(t, strings[0])) |i| {
@@ -42,16 +50,16 @@ pub const Object = struct {
                 }
             }
             obj_string = try ObjString.init(allocator, strings[0]);
-        } else top: {
+            errdefer obj_string.deinit(allocator);
+        }
+        // concatenated strings
+        else top: {
             var total_length: usize = 0;
             for (strings) |s| {
                 total_length += s.len;
             }
-            var buf = try allocator.alignedAlloc(
-                u8,
-                8,
-                total_length,
-            );
+
+            var buf = try allocator.alignedAlloc(u8, 8, total_length);
             defer allocator.free(buf);
 
             var offset: usize = 0;
@@ -59,6 +67,7 @@ pub const Object = struct {
                 std.mem.copyForwards(u8, buf[offset..], s);
                 offset += s.len;
             }
+
             if (intern_table) |t| {
                 if (tableFindString(t, buf)) |i| {
                     obj_string = i;
@@ -67,12 +76,12 @@ pub const Object = struct {
                 }
             }
             obj_string = try ObjString.init(allocator, buf);
+            errdefer obj_string.deinit(allocator);
         }
-        errdefer if (!interned) {
-            obj_string.deinit(allocator);
-        };
 
+        // Create the Object wrapper
         const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
 
         obj.* = .{
             .allocator = allocator,
@@ -83,8 +92,19 @@ pub const Object = struct {
                 } else obj_string,
             },
         };
-        if (intern_table) |t| _ = try t.set(obj.data.String, .Nil);
 
+        // Add to intern table if provided
+        if (intern_table) |t| {
+            if (t.set(obj.data.String, .Nil)) |_| {} else |err| {
+                if (!interned) {
+                    obj.data.String.deinit(allocator);
+                    allocator.destroy(obj);
+                }
+                return err;
+            }
+        }
+        // Even if the string is interned, the Object object is a heap allocation and must be tracked.
+        vm.addObj(obj);
         return .{ .obj = obj, .interned = interned };
     }
 
@@ -101,25 +121,17 @@ pub const Object = struct {
             // else => null,
         };
     }
-
-    pub fn objType(self: *const Object) ?[]const u8 {
-        return switch (self.data) {
-            .String => "string",
-            // else => null,
-        };
-    }
-
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
-                @constCast(s).deinit(self.allocator);
+                s.deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
     }
 
     pub fn isEqual(self: *const Object, other: *const Object) bool {
-        // Fast path for same object
+        // Fast path for same object (interned strs)
         if (self == other) return true;
         // Different object types can't be equal
         if (@as(std.meta.Tag(@TypeOf(self.data)), self.data) !=
@@ -141,6 +153,8 @@ pub const Object = struct {
 pub const ObjString = struct {
     chars: []align(8) const u8,
     hash: u64,
+    // U32 could've been used here but 4 bytes would've been added as padding anyway
+    // due to `chars` being 8-byte aligned
     refcount: usize = 0,
 
     pub fn eql(a: *const ObjString, b: *const ObjString) bool {
@@ -165,6 +179,7 @@ pub const ObjString = struct {
     }
     /// Deallocate the backing array
     pub fn deinit(self: *ObjString, allocator: Allocator) void {
+        std.debug.assert(self.refcount != 0);
         if (self.refcount > 1) {
             self.refcount -= 1;
             return;
@@ -184,3 +199,4 @@ test "Object" {
 const hasher = @import("common.zig").hasher;
 const Table = @import("table.zig").Table;
 const tableFindString = @import("table.zig").tableFindString;
+const VM = @import("vm.zig").VM;

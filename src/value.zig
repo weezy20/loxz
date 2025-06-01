@@ -17,12 +17,12 @@ pub const Value = union(enum) {
         switch (self) {
             .Number => try writer.print("Number {d}", .{self.Number}),
             .String => try writer.print("String \"{s}\"", .{self.String}),
-            .Bool => try writer.print("Boolean {s}", .{if (self.Bool) "true" else "false"}),
+            .Bool => |b| try writer.print("Boolean {any}", .{b}),
             .Nil => try writer.writeAll("Nil"),
             .Obj => try writer.print("{s}", .{self.Obj}),
         }
     }
-    pub fn isNumber(value: *const Value) ?f64 {
+    pub fn asNumber(value: *const Value) ?f64 {
         return switch (value.*) {
             .Number => |num| num,
             else => null,
@@ -96,6 +96,14 @@ pub const Value = union(enum) {
         }
         return null;
     }
+    pub fn asObjString(self: *const Value) ?*ObjString {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .String) {
+                return obj.data.String;
+            }
+        }
+        return null;
+    }
 };
 
 /// Value Arrays
@@ -145,3 +153,4 @@ pub const ValueArray = struct {
 const std = @import("std");
 const lib = @import("root.zig");
 const Object = lib.Object;
+const ObjString = lib.ObjString;

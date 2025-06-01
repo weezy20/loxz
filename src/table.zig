@@ -11,6 +11,7 @@ pub const Table = struct {
     count: usize, // entries + tombstones
     capacity: usize,
     entries: []align(8) Entry,
+    hash_fn: *const fn ([]const u8) u64 = loxHash,
 
     pub fn init(allocator: std.mem.Allocator) Table {
         return Table{
@@ -18,6 +19,18 @@ pub const Table = struct {
             .count = 0,
             .capacity = 0,
             .entries = undefined,
+        };
+    }
+    pub fn initWithHashFn(allocator: std.mem.Allocator, hash_fn: enum { clhash, loxhash, default }) Table {
+        return Table{
+            .allocator = allocator,
+            .count = 0,
+            .capacity = 0,
+            .entries = undefined,
+            .hash_fn = switch (hash_fn) {
+                .clhash => clhash,
+                .default, .loxhash => loxHash,
+            },
         };
     }
     pub fn deinit(self: *Table) void {
@@ -78,11 +91,13 @@ pub const Table = struct {
         }
         table.capacity = new_capacity;
     }
-    pub fn printTable(self: *const Table) void {
-        std.debug.print("Table (count: {}, capacity: {}):\n", .{ self.count, self.capacity });
+    pub fn printTable(self: *const Table, name: []const u8) void {
+        if (self.capacity == 0) return;
+        std.debug.print("\x1b[3mTable {s} (count: {}, capacity: {}):\x1b[0m\n", .{ name, self.count, self.capacity });
+
         for (self.entries, 0..) |entry, index| {
             if (entry.key) |k| {
-                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}\n", .{ index, k, k.chars, entry.value.? });
+                std.debug.print("{}  Key ptr: {*} (chars: {s}), Value: {any}, refcount : {d}\n", .{ index, k, k.chars, entry.value.?, k.refcount });
             } else if (entry.value) |v| {
                 std.debug.print("{}  Tombstone with value: {any}\n", .{ index, v });
             } else {
@@ -125,7 +140,7 @@ pub fn tableAddAll(from: *Table, to: *Table) !void {
 }
 pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
     if (table.count == 0) return null;
-    const hashcode = hasher(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
+    const hashcode = table.hash_fn(chars); // Switch to loxHash because chars is not guaranteed to be 8 byte aligned
     var idx = hashcode % table.capacity;
     while (true) : (idx = @mod(idx + 1, table.capacity)) {
         const e = &table.entries[idx];
@@ -151,7 +166,6 @@ pub fn tableFindString(table: *Table, chars: []const u8) ?*ObjString {
 }
 
 test "Table" {
-    initClHashRandomKey();
     const allocator = testing.allocator;
     var table = Table.init(allocator);
     defer table.deinit();
@@ -171,7 +185,6 @@ test "Table" {
 }
 
 /// FNV-1a hash function
-// We don't use it in loxz because we chose to go with clhash instead!
 pub fn loxHash(key: []const u8) u64 {
     var hash: u64 = 2166136261;
     for (key) |char| {
@@ -184,25 +197,26 @@ test "loxHash" {
     const expected_hash = 10461433681597188260;
     try testing.expect(expected_hash == loxHash("Zig is amazing"));
 }
-/// Note: pointer must be 8 byte aligned
-pub fn clHash(key: []const u8) u64 {
-    return clhash.clhash(RANDOM, key.ptr, key.len);
-}
-pub fn initClHashRandomKey() void {
-    if (RANDOM == null)
-        RANDOM = clhash.get_random_key_for_clhash(0x23a23cf5033c3c81, 0xb3816f6a2c68e530).?
-    else
-        @panic("Not allowed");
-}
 
 var RANDOM: ?*anyopaque = null;
-
 const std = @import("std");
 const testing = std.testing;
-const clhash = @cImport({
-    @cInclude("clhash.h");
-});
 const Object = @import("object.zig").Object;
 const ObjString = @import("object.zig").ObjString;
 const Value = @import("value.zig").Value;
 const hasher = @import("common.zig").hasher;
+const clhash = @import("common.zig").clhasher;
+const lib = @import("root.zig");
+
+test "clhash" {
+    if (lib.hasClhash) {
+        lib.ClHash.init();
+        const str = try ObjString.init(testing.allocator, "Zig is amazing");
+        defer str.deinit(testing.allocator);
+        const hash = clhash(str.chars);
+        try testing.expect(hash == 0x104f5a15cd5f5168);
+    } else {
+        try testing.expect(!lib.hasClhash);
+        // no-op
+    }
+}

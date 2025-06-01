@@ -5,10 +5,6 @@ const std = @import("std");
 const lib = @import("loxz");
 const VM = lib.VM;
 
-pub fn setup() void {
-    lib.initClHashRandomKey();
-}
-
 pub const Config = struct {
     debug: bool,
     debug_level: u8,
@@ -16,6 +12,9 @@ pub const Config = struct {
     file_path: ?[]const u8,
     repl_mode: bool = undefined,
 };
+fn setup() void {
+    lib.initHash();
+}
 
 pub fn parseArgs(allocator: std.mem.Allocator) !Config {
     const params = comptime clap.parseParamsComptime(
@@ -40,7 +39,7 @@ pub fn parseArgs(allocator: std.mem.Allocator) !Config {
         try clap.help(std.io.getStdErr().writer(), clap.Help, &params, .{});
         std.process.exit(0);
     }
-
+    setup();
     return .{
         // Provide false as default if the flags weren't provided
         .debug = res.args.debug != 0,
@@ -141,8 +140,6 @@ pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
             vm.resetStack();
             lib.resetParser();
         }
-        try reportResult(result, true);
-
         buffer.clearRetainingCapacity(); // clear bytes but don't resize without need
     }
 }
@@ -163,57 +160,38 @@ pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
     var vm = lib.initVM(allocator);
     defer lib.deinitVM(&vm);
     config.repl_mode = false;
-    const result = interpret(source, config, allocator, &vm) catch |err| {
+    _ = interpret(source, config, allocator, &vm) catch |err| {
         std.debug.print("Unhandled exception: {s}\n", .{@errorName(err)});
         std.process.exit(69);
     };
-    try reportResult(result, false);
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
     var chunk = lib.Chunk.init(&allocator);
     defer chunk.deinit();
-    const compile_result = lib.compile(source, &chunk, allocator, .{
+    var compiler = lib.Compiler.init(allocator, &chunk);
+    const compile_result = lib.compile(&compiler, source, vm, allocator, .{
         .debug = config.debug,
         .debug_level = config.debug_level,
         .repl_mode = config.repl_mode,
     });
-    if (!compile_result[0]) {
-        return .compile_error;
-    }
-    var compilerTable = compile_result[3];
+    var compilerStringTable = compiler.stringTable;
     defer {
-        if (compile_result[1]) |d| {
+        if (compile_result.debugInfo) |d| {
             d.deinit();
             allocator.destroy(d);
         }
+        compiler.deinit();
+    }
+    if (!compile_result.success) {
+        return .compile_error;
     }
     return lib.interpret(vm, &chunk, .{
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
-        .debugInfo = compile_result[1],
-        .init_string_table = &compilerTable,
+        .debugInfo = compile_result.debugInfo,
+        .init_string_table = if (compilerStringTable.count > 0) &compilerStringTable else null,
     });
-}
-
-fn reportResult(result: InterpretResult, repl_mode: bool) !void {
-    const stdout = std.io.getStdOut().writer();
-    if (result != .ok) {
-        switch (result) {
-            .runtime_error => |err| {
-                try stdout.writeAll("\x1b[33mRuntime error: \x1b[0m");
-                const msg = lib.formatRuntimeError(err);
-                try stdout.writeAll(msg);
-                try stdout.writeAll("\n");
-            },
-            .compile_error => {
-                if (!repl_mode) {
-                    try stdout.writeAll("Compiler error\n");
-                }
-            },
-            .ok => {},
-        }
-    }
 }
 
 const InterpretResult = @import("loxz").InterpretResult;

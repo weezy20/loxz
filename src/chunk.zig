@@ -29,6 +29,24 @@ pub const Chunk = struct {
         self.constants.deinit(self.allocator.*);
         self.* = undefined; // Prevent's use after free during compilation
     }
+    /// Print raw bytecode
+    pub fn print(self: *const Chunk, header: []const u8) void {
+        if (self.count == 0) {
+            dbg("{s} -- Chunk is empty\n", .{header});
+            return;
+        }
+        dbg("{s} -- Chunk: {d} bytes, {d} constants\n", .{ header, self.count, self.constants.count });
+        dbg("\tCode begin: [", .{});
+        for (self.code[0..self.count]) |byte| {
+            dbg("0x{x},", .{byte});
+        }
+        dbg("]", .{});
+        dbg("\n\tConstants: ", .{});
+        for (self.constants.values[0..self.constants.count], 0..) |value, i| {
+            dbg("(idx {d}: {any}), ", .{ i, value });
+        }
+        dbg("\n", .{});
+    }
 
     /// Write a bytecode to the chunk, with DebugInfo
     pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, span: [2]usize) !void {
@@ -82,22 +100,42 @@ pub const Chunk = struct {
             try d.addLocation(location);
         }
     }
-    /// Given a `idx` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
-    /// in the ValueArray. If `idx` doesn't contain a constant opcode, return null.
-    pub fn getConstantIdx(self: *const Chunk, idx: usize) ?usize {
-        const instruction: OpCode = @enumFromInt(self.code[idx]);
+    /// Add a value to chunk.constants, checking for u16 index limit and returning the index as usize.
+    /// Writes the constant index as a u16 (big-endian) but returns usize.
+    pub fn writeU16Constant(
+        self: *Chunk,
+        value: Value,
+    ) !usize {
+        const index = self.constants.count;
+        if (index >= 1 << 16) {
+            return error.Exceed16BitsIndex;
+        }
+        // Write the constant to ValueArray
+        try self.constants.write(value, self.allocator.*);
+        return index;
+    }
+    /// Given a `offset` to bytecode OP_CONSTANT or OP_CONSTANT_LONG, return the constant value's index
+    /// in the ValueArray. If `offset` doesn't contain an opcode, return it.
+    pub fn getConstantIdx(self: *const Chunk, offset: usize) ?usize {
+        const instruction: OpCode = @enumFromInt(self.code[offset]);
         switch (instruction) {
             .CONSTANT => {
-                return @as(usize, self.code[idx + 1]);
+                return @as(usize, self.code[offset + 1]);
             },
             .CONSTANT_LONG => {
-                return @as(usize, self.code[idx + 1]) << 16 |
-                    @as(usize, self.code[idx + 2]) << 8 |
-                    @as(usize, self.code[idx + 3]);
+                return @as(usize, self.code[offset + 1]) << 16 |
+                    @as(usize, self.code[offset + 2]) << 8 |
+                    @as(usize, self.code[offset + 3]);
             },
-            else => {
-                return null;
+            .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL => {
+                // Interpret the next 16 bytes as a usize (big-endian)
+                var usize_idx: usize = 0x00;
+                inline for (0..2) |i| {
+                    usize_idx = (usize_idx << 8) | self.code[offset + 1 + i];
+                }
+                return usize_idx;
             },
+            else => return null,
         }
     }
 

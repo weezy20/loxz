@@ -26,6 +26,7 @@ pub const RuntimeError = error{
     InvalidEquality,
     InvalidComparison,
     CannotAddDifferentTypes,
+    GlobalNotFound,
 };
 pub fn formatRuntimeError(err: RuntimeError) []const u8 {
     return switch (err) {
@@ -39,5 +40,6 @@ pub fn formatRuntimeError(err: RuntimeError) []const u8 {
         RuntimeError.InvalidEquality => "Invalid operands for equality",
         RuntimeError.InvalidComparison => "Invalid operands for comparison",
         RuntimeError.CannotAddDifferentTypes => "Operands of different types cannot be added",
+        RuntimeError.GlobalNotFound => "Undefined global variable",
     };
 }

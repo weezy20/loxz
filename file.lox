@@ -1,1 +1,20 @@
-"A+B" == "A+B"
+// var beverage = "cafe au lait";
+// var breakfast = "beignets with " + beverage;
+// print breakfast;
+
+// var a = 1;
+// a = 3;
+// print a;
+
+// var a = 2; var b = 3; var c = 5; var d = 10;
+// 
+// a * b = c + d;
+// print b;
+
+
+var breakfast = "beignets";
+breakfast = "oops woke up late, anyways eating ";
+var beverage = "cafe au lait";
+breakfast = breakfast + "beignets with " + beverage;
+
+print breakfast;
