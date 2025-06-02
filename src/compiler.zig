@@ -144,12 +144,11 @@ fn variable() void {
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
     if (cc.resolveLocal(&name)) |arg| {
-        const uarg: u8 = @intCast(arg); // u8 limit for locals
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitU16Op(op.SET_LOCAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         } else {
-            emitU16Op(op.GET_LOCAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         }
     } else |_| {
         // switch (err) {
