@@ -143,17 +143,21 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    const arg: isize = cc.resolveLocal(&name);
-    if (arg != -1) {
-        const uarg: u8 = @intCast(arg); // u8 limit for locals
+    if (cc.resolveLocal(&name)) |arg| {
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitBytes(&.{ @intFromEnum(op.SET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         } else {
-            emitBytes(&.{ @intFromEnum(op.GET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         }
-    } else {
-        // If the variable is not found in the locals, it must be a global variable
+    } else |_| {
+        // switch (err) {
+        //     // No action required as the two errors we generate are handled.
+        //     CompilerError.LocalNotFound => {},
+        //     CompilerError.SameInitializer => {}, // Will be reported by resolveLocal()
+        //     else => unreachable,
+        // }
+
         // Fetch the variable's index in the chunk constant pool
         // Safe as the index returned is within u16 range
         const uarg = identifierConstant(&name, intern_table);
@@ -284,6 +288,7 @@ fn expressionStatement() void {
     emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
 }
 fn beginScope() void {
+    // Practically Safe: scopeDepth is i32
     cc.scopeDepth += 1;
 }
 fn block() void {
@@ -297,8 +302,8 @@ fn endScope() void {
     // Decrease the scope depth, popping all locals in the current scope
     cc.scopeDepth -= 1;
     // Pop all locals in the current scope
-    while (cc.localCount > 0 and cc.locals[cc.localCount - 1].depth > cc.scopeDepth) {
-        cc.localCount -= 1;
+    while (cc.localCount() > 0 and cc.locals.items[cc.localCount() - 1].depth > cc.scopeDepth) {
+        _ = cc.locals.pop();
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
@@ -343,41 +348,45 @@ fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     return index;
 }
 inline fn addLocal(name: *const Token) void {
-    if (@as(usize, cc.localCount) == LOCAL_COUNT - 1) {
-        Error("Too many local variables in function.");
+    // Redundant check, but ensures we don't overflow the localCount
+    if (cc.localCount() == MAX_LOCAL_COUNT) {
+        Error("add local: Too many local variables in function.");
         return;
     }
-    cc.locals[cc.localCount] = Local{
+    cc.locals.append(Local{
         .name = name.*,
         .depth = -1,
-    };
-    cc.localCount += 1;
+    }) catch @panic("Out of memory : adding local variable");
 }
-/// Lox allows variable shadowing but within the same scope, it's an error.
-/// var a = 1;      // Outer scope
-/// {
-///     var a = 2;  // ✅ Allowed (shadowing)
-///     var a = 3;  // ❌ Error (redeclaration in same scope)
-/// }
-fn declareVariable() void {
+// Lox allows variable shadowing but within the same scope, it's an error.
+// var a = 1;      // Outer scope
+// {
+//     var a = 2;  // ✅ Allowed (shadowing)
+//     var a = 3;  // ❌ Error (redeclaration in same scope)
+// }
+fn declareLocalVariable() void {
     if (cc.scopeDepth == 0) return; // Global variable, no need to declare
-    if (cc.localCount >= LOCAL_COUNT) {
+    if (cc.localCount() == MAX_LOCAL_COUNT) {
         Error("Too many local variables in function.");
         return;
     }
     const name = parser.previous;
     // Detect if the variable is already declared in the current scope
-    var i: isize = if (cc.localCount == 0) -1 else @intCast(cc.localCount - 1);
+    var i: isize = if (cc.localCount() == 0) -1 else @intCast(cc.localCount() - 1);
     while (i >= 0) : (i -= 1) {
-        const local = &cc.locals[@intCast(i)];
+        const local = &cc.locals.items[@intCast(i)];
         // If we encounter a variable from an outer scope (depth < cc.scopeDepth), we stop checking further to enable shadowed var declaration.
         if (local.depth != -1 and local.depth < cc.scopeDepth) {
+            // -1 means the variable is not initialized yet.
+            // If local variable is shallower than the current scope, we stop checking further as shadowing is now possible.
+            // All locals are added in the order of increasing scope depth for a given scope before they're popped so we can break the loop here.
             break;
         }
         // cc.scopeDepth == local.depth here, and it is an error to shadow a variable in the same scope.
         // Invariant: local.depth ≤ cc.scopeDepth because cc.scopeDepth is tracking the inner most scope.
         if (identifiersEqual(&name, &local.name)) {
             Error("Already a variable with this name in this scope.");
+            // return; //TODO: Should we continue to add the local anyway?
         }
     }
     addLocal(&name);
@@ -388,8 +397,8 @@ fn identifiersEqual(a: *const Token, b: *const Token) bool {
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
-    declareVariable(); // Entry point for local variable declaration
-    if (cc.scopeDepth > 0) return 0;
+    declareLocalVariable(); // Entry point for local variable declaration
+    if (cc.scopeDepth > 0) return 0; // Dummy index, var already handled by declareLocalVariable
 
     //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);
@@ -424,8 +433,8 @@ fn declaration() void {
 /// Mark the last local variable as initialized.
 /// Declaring” is when the variable is added to the scope
 fn markInitialized() void {
-    if (cc.localCount == 0) return; // No locals in the current scope
-    cc.locals[cc.localCount - 1].depth = @intCast(cc.scopeDepth); // Safe: we don't expect a nesting depth greater than 2^31
+    if (cc.localCount() == 0) return; // No locals in the current scope
+    cc.locals.items[cc.localCount() - 1].depth = cc.scopeDepth;
 }
 fn synchronize() void {
     parser.panic_mode = false;
@@ -688,14 +697,12 @@ const CompilationResult = struct {
     err: ?CompilerError,
 };
 
-const LOCAL_COUNT: usize = 256; // Sticking to clox specs
+const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
 pub const Compiler = struct {
-    locals: [LOCAL_COUNT]Local,
-    /// Number of locals in current scope
-    localCount: u8,
+    locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
-    scopeDepth: usize,
+    scopeDepth: i32, // Same as clox
     /// Compiler constant Table
     constantTable: Table,
     /// Compiler string table
@@ -710,8 +717,7 @@ pub const Compiler = struct {
 
     pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
         return .{
-            .locals = undefined,
-            .localCount = 0,
+            .locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
             .scopeDepth = 0,
             .stringTable = Table.init(allocator),
             .constantTable = Table.initWithHashFn(allocator, .default),
@@ -721,26 +727,35 @@ pub const Compiler = struct {
     pub fn deinit(self: *@This()) void {
         self.stringTable.deinit();
         self.constantTable.deinit();
+        self.locals.deinit();
         self.* = undefined;
     }
-    fn resolveLocal(self: *Compiler, name: *const Token) isize {
-        if (self.localCount == 0) return -1; // No locals in the current scope
-        var i: usize = self.localCount - 1; // Safe
-        while (i > 0) : (i -= 1) {
-            const local = &self.locals[i];
+    /// Number of locals in Compiler.locals as usize
+    inline fn localCount(self: *const @This()) usize {
+        return self.locals.items.len;
+    }
+    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!u16 {
+        if (self.localCount() == 0) return CompilerError.LocalNotFound;
+        var i: u16 = @intCast(self.localCount() - 1); // Safe: we never add more than MAX_LOCAL_COUNT locals
+
+        while (true) {
+            const local = &self.locals.items[i];
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
                     Error("Cannot read local variable in its own initializer.");
-                    return -1;
+                    return CompilerError.SameInitializer;
                 }
-                return @intCast(i);
+                return i;
             }
+
+            if (i == 0) break;
+            i -= 1;
         }
-        return -1;
+        return CompilerError.LocalNotFound;
     }
 };
 
 pub const Local = struct {
     name: Token,
-    depth: isize,
+    depth: i32,
 };

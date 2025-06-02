@@ -1,0 +1,32 @@
+fun fib(n) {
+  // Base cases for Fibonacci sequence: fib(0) = 0, fib(1) = 1
+  if (n <= 1) {
+    return n;
+  }
+  // Recursive step: fib(n) = fib(n-1) + fib(n-2)
+  return fib(n - 1) + fib(n - 2);
+}
+
+// The original Clox interpreter (from "Crafting Interpreters")
+// typically has a limit of 64 active call frames (FRAMES_MAX = 64).
+// Each recursive call to fib(n) creates a new call frame.
+// Calling fib(65) will attempt to make 65 nested calls,
+// which should exceed this FRAMES_MAX limit and cause a
+// "Stack overflow" runtime error in a standard Clox interpreter.
+
+// This computation is extremely slow due to the nature of naive recursion.
+// The goal here is not to get the result efficiently, but to test stack limits.
+print "Attempting to calculate fib(65)...";
+print "This is expected to cause a stack overflow in a standard Clox interpreter.";
+
+var result = fib(65);
+
+// If the interpreter doesn't stack overflow, it will eventually print the result.
+// However, fib(65) is a very large number (17,167,680,177,565) and will take an
+// extremely long time to compute this way.
+print "fib(65) result (if no stack overflow occurred):";
+print result;
+
+// For a faster test that completes and shows a result (on a compliant Lox):
+// print "Calculating fib(20):";
+// print fib(20); // Expected: 6765

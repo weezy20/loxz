@@ -13,6 +13,10 @@ pub const CompilerError = error{
     NaN,
     /// Unreachable compiler state
     Unreachable,
+    /// Local variable not found
+    LocalNotFound,
+    /// Cannot declare a variable with its own initializer
+    SameInitializer,
 };
 
 pub const RuntimeError = error{
