@@ -2,7 +2,7 @@
 
 ### Usage
 
-Interpret a lox file
+Interpret a lox file. Some sample programs are provided in the `programs` folder.
 ```sh
 loxz <file.lox> 
 ```
@@ -21,7 +21,7 @@ Flags:
 | `-t`, `--stack-tracing` | Enable VM stack tracing   |
 | `-d`, `--debug`   | Enable debug output, set debug level  |
 
-## Additional features in loxz: 
+## Additional features in loxz over the standard implementation: 
 - Implemented `OP_CONSTANT_LONG` to enable 16_777_216 constants. This is flexible and 24 bits are only used after 8 bits for constant
 pool have been exhausted.
 - Larger 16 bit indexes for Global variables with Global cache to reduce hashtable lookups.
