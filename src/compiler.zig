@@ -143,17 +143,22 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    const arg: isize = cc.resolveLocal(&name);
-    if (arg != -1) {
+    if (cc.resolveLocal(&name)) |arg| {
         const uarg: u8 = @intCast(arg); // u8 limit for locals
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitBytes(&.{ @intFromEnum(op.SET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.SET_LOCAL, uarg) catch @panic(BYTECODE_FAIL);
         } else {
-            emitBytes(&.{ @intFromEnum(op.GET_LOCAL), uarg }) catch @panic(BYTECODE_FAIL);
+            emitU16Op(op.GET_LOCAL, uarg) catch @panic(BYTECODE_FAIL);
         }
-    } else {
-        // If the variable is not found in the locals, it must be a global variable
+    } else |_| {
+        // switch (err) {
+        //     // No action required as the two errors we generate are handled.
+        //     CompilerError.LocalNotFound => {},
+        //     CompilerError.SameInitializer => {}, // Will be reported by resolveLocal()
+        //     else => unreachable,
+        // }
+
         // Fetch the variable's index in the chunk constant pool
         // Safe as the index returned is within u16 range
         const uarg = identifierConstant(&name, intern_table);
@@ -730,8 +735,8 @@ pub const Compiler = struct {
         self.locals.deinit();
         self.* = undefined;
     }
-    fn resolveLocal(self: *Compiler, name: *const Token) isize {
-        if (self.localCount == 0) return -1;
+    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!u16 {
+        if (self.localCount == 0) return CompilerError.LocalNotFound;
         var i: u16 = self.localCount - 1;
 
         while (true) {
@@ -739,15 +744,15 @@ pub const Compiler = struct {
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
                     Error("Cannot read local variable in its own initializer.");
-                    return -1;
+                    return CompilerError.SameInitializer;
                 }
-                return @as(isize, i); // Safe upcast from u16 to isize
+                return i;
             }
 
             if (i == 0) break;
             i -= 1;
         }
-        return -1;
+        return CompilerError.LocalNotFound;
     }
 };
 
