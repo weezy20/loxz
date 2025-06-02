@@ -284,6 +284,7 @@ fn expressionStatement() void {
     emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
 }
 fn beginScope() void {
+    // Practically Safe: scopeDepth is i32
     cc.scopeDepth += 1;
 }
 fn block() void {
@@ -297,7 +298,7 @@ fn endScope() void {
     // Decrease the scope depth, popping all locals in the current scope
     cc.scopeDepth -= 1;
     // Pop all locals in the current scope
-    while (cc.localCount > 0 and cc.locals[cc.localCount - 1].depth > cc.scopeDepth) {
+    while (cc.localCount > 0 and cc.locals.items[@as(usize, cc.localCount) - 1].depth > cc.scopeDepth) {
         cc.localCount -= 1;
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
@@ -695,7 +696,7 @@ pub const Compiler = struct {
     /// Number of locals in current scope
     localCount: u16,
     /// Number of blocks surrounding current code block
-    scopeDepth: u16,
+    scopeDepth: i32, // Same as clox
     /// Compiler constant Table
     constantTable: Table,
     /// Compiler string table
