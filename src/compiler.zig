@@ -726,7 +726,7 @@ pub const Compiler = struct {
     fn resolveLocal(self: *Compiler, name: *const Token) isize {
         if (self.localCount == 0) return -1; // No locals in the current scope
         var i: usize = self.localCount - 1; // Safe
-        while (i >= 0) : (i -= 1) {
+        while (i > 0) : (i -= 1) {
             const local = &self.locals[i];
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
@@ -735,7 +735,6 @@ pub const Compiler = struct {
                 }
                 return @intCast(i);
             }
-            if (i == 0) break;
         }
         return -1;
     }
