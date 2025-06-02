@@ -19,7 +19,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
             break :blk EMPTY;
         };
 
-        const str = std.fmt.allocPrint(allocator, "(line:{d} col:{d}-{d})", .{ location.line, location.start_column, location.end_column }) catch DEBUG_ALLOC_FAILED;
+        const str = std.fmt.allocPrint(allocator, "(line:{d})", .{location.line}) catch DEBUG_ALLOC_FAILED;
 
         break :blk str;
     } else EMPTY;
@@ -52,8 +52,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .DEFINE_GLOBAL => return constantU16Instruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
         .GET_GLOBAL => return constantU16Instruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
         .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),
-        .GET_LOCAL => return byteInstruction("OP_GET_LOCAL", chunk, byte_offset, src_info),
-        .SET_LOCAL => return byteInstruction("OP_SET_LOCAL", chunk, byte_offset, src_info),
+        .GET_LOCAL => return U16Instruction("OP_GET_LOCAL", chunk, byte_offset, src_info),
+        .SET_LOCAL => return U16Instruction("OP_SET_LOCAL", chunk, byte_offset, src_info),
         // else => {chunk,
         //     return 0;
         // },
@@ -108,6 +108,14 @@ fn byteInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_inf
         dbg("Failed to print local index", .{});
     };
     return offset + 2;
+}
+
+fn U16Instruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const slot: u16 = @as(u16, chunk.code[offset + 1]) << 8 | @as(u16, chunk.code[offset + 2]);
+    stderr.print("{0s} (slot: {1d}_u16)\t{2s}\n", .{ name, slot, src_info }) catch {
+        dbg("Failed to print local index", .{});
+    };
+    return offset + 3;
 }
 
 /// Location for chunk bytecode
