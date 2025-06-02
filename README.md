@@ -2,15 +2,16 @@
 
 ### Usage
 
-Interpret a lox file. Some sample programs are provided in the `programs` folder.
+Interpret a lox file. A lox file must have `.lox` extension.
+Some sample programs are provided in the `programs` folder.
 ```sh
-loxz <file.lox> 
+loxz <OPTIONS> <file.lox>
 ```
 
 Run in REPL mode
 
 ```sh
-loxz
+loxz <OPTIONS>
 ```
 
 Flags:

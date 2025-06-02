@@ -370,9 +370,6 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .GET_LOCAL => {
                 const slot = self.readU16();
-                // if (slot >= self.stackSize()) { // This code never executes with current stack size of 512*sizeof(Value)
-                //     @panic("u8::max is within stack size");
-                // }
                 try self.push(self.stack[slot]);
             },
             .SET_LOCAL => {
