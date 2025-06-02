@@ -344,25 +344,26 @@ fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     return index;
 }
 inline fn addLocal(name: *const Token) void {
-    if (@as(usize, cc.localCount) == LOCAL_COUNT - 1) {
-        Error("Too many local variables in function.");
+    // Redundant check, but ensures we don't overflow the localCount
+    if (cc.localCount == @as(u16, MAX_LOCAL_COUNT)) {
+        Error("add local: Too many local variables in function.");
         return;
     }
-    cc.locals[cc.localCount] = Local{
+    cc.locals.items[cc.localCount] = Local{
         .name = name.*,
         .depth = -1,
     };
     cc.localCount += 1;
 }
-/// Lox allows variable shadowing but within the same scope, it's an error.
-/// var a = 1;      // Outer scope
-/// {
-///     var a = 2;  // ✅ Allowed (shadowing)
-///     var a = 3;  // ❌ Error (redeclaration in same scope)
-/// }
-fn declareVariable() void {
+// Lox allows variable shadowing but within the same scope, it's an error.
+// var a = 1;      // Outer scope
+// {
+//     var a = 2;  // ✅ Allowed (shadowing)
+//     var a = 3;  // ❌ Error (redeclaration in same scope)
+// }
+fn declareLocalVariable() void {
     if (cc.scopeDepth == 0) return; // Global variable, no need to declare
-    if (cc.localCount >= LOCAL_COUNT) {
+    if (cc.localCount == MAX_LOCAL_COUNT) {
         Error("Too many local variables in function.");
         return;
     }
@@ -370,15 +371,19 @@ fn declareVariable() void {
     // Detect if the variable is already declared in the current scope
     var i: isize = if (cc.localCount == 0) -1 else @intCast(cc.localCount - 1);
     while (i >= 0) : (i -= 1) {
-        const local = &cc.locals[@intCast(i)];
+        const local = &cc.locals.items[@intCast(i)];
         // If we encounter a variable from an outer scope (depth < cc.scopeDepth), we stop checking further to enable shadowed var declaration.
         if (local.depth != -1 and local.depth < cc.scopeDepth) {
+            // -1 means the variable is not initialized yet.
+            // If local variable is shallower than the current scope, we stop checking further as shadowing is now possible.
+            // All locals are added in the order of increasing scope depth for a given scope before they're popped so we can break the loop here.
             break;
         }
         // cc.scopeDepth == local.depth here, and it is an error to shadow a variable in the same scope.
         // Invariant: local.depth ≤ cc.scopeDepth because cc.scopeDepth is tracking the inner most scope.
         if (identifiersEqual(&name, &local.name)) {
             Error("Already a variable with this name in this scope.");
+            // return; //TODO: Should we continue to add the local anyway?
         }
     }
     addLocal(&name);
@@ -389,8 +394,8 @@ fn identifiersEqual(a: *const Token, b: *const Token) bool {
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
-    declareVariable(); // Entry point for local variable declaration
-    if (cc.scopeDepth > 0) return 0;
+    declareLocalVariable(); // Entry point for local variable declaration
+    if (cc.scopeDepth > 0) return 0; // Dummy index, var already handled by declareLocalVariable
 
     //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);
@@ -426,7 +431,7 @@ fn declaration() void {
 /// Declaring” is when the variable is added to the scope
 fn markInitialized() void {
     if (cc.localCount == 0) return; // No locals in the current scope
-    cc.locals[cc.localCount - 1].depth = @intCast(cc.scopeDepth); // Safe: we don't expect a nesting depth greater than 2^31
+    cc.locals.items[cc.localCount - 1].depth = cc.scopeDepth;
 }
 fn synchronize() void {
     parser.panic_mode = false;
@@ -689,7 +694,7 @@ const CompilationResult = struct {
     err: ?CompilerError,
 };
 
-const MAX_LOCAL_COUNT: usize = std.maxInt(u16) + 1; // Extending to 65536 locals
+const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
 pub const Compiler = struct {
     locals: std.ArrayList(Local),
@@ -711,7 +716,7 @@ pub const Compiler = struct {
 
     pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
         return .{
-            .locals = std.ArrayListUnmanaged(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
+            .locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
             .localCount = 0,
             .scopeDepth = 0,
             .stringTable = Table.init(allocator),

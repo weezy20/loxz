@@ -1,0 +1,7 @@
+// This will trigger the redeclaration error for 'a'
+{
+  var a = 1;
+  var a = 2; // Error: Already a variable with this name in this scope.
+  var a = 3; // Error: Already a variable with this name in this scope.
+  print a;
+}
