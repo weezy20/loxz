@@ -688,14 +688,14 @@ const CompilationResult = struct {
     err: ?CompilerError,
 };
 
-const LOCAL_COUNT: usize = 256; // Sticking to clox specs
+const MAX_LOCAL_COUNT: usize = std.maxInt(u16) + 1; // Extending to 65536 locals
 
 pub const Compiler = struct {
-    locals: [LOCAL_COUNT]Local,
+    locals: std.ArrayList(Local),
     /// Number of locals in current scope
-    localCount: u8,
+    localCount: u16,
     /// Number of blocks surrounding current code block
-    scopeDepth: usize,
+    scopeDepth: u16,
     /// Compiler constant Table
     constantTable: Table,
     /// Compiler string table
@@ -710,7 +710,7 @@ pub const Compiler = struct {
 
     pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
         return .{
-            .locals = undefined,
+            .locals = std.ArrayListUnmanaged(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
             .localCount = 0,
             .scopeDepth = 0,
             .stringTable = Table.init(allocator),
@@ -721,20 +721,25 @@ pub const Compiler = struct {
     pub fn deinit(self: *@This()) void {
         self.stringTable.deinit();
         self.constantTable.deinit();
+        self.locals.deinit();
         self.* = undefined;
     }
     fn resolveLocal(self: *Compiler, name: *const Token) isize {
-        if (self.localCount == 0) return -1; // No locals in the current scope
-        var i: usize = self.localCount - 1; // Safe
-        while (i > 0) : (i -= 1) {
-            const local = &self.locals[i];
+        if (self.localCount == 0) return -1;
+        var i: u16 = self.localCount - 1;
+
+        while (true) {
+            const local = &self.locals.items[i];
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
                     Error("Cannot read local variable in its own initializer.");
                     return -1;
                 }
-                return @intCast(i);
+                return @as(isize, i); // Safe upcast from u16 to isize
             }
+
+            if (i == 0) break;
+            i -= 1;
         }
         return -1;
     }
@@ -742,5 +747,5 @@ pub const Compiler = struct {
 
 pub const Local = struct {
     name: Token,
-    depth: isize,
+    depth: i32,
 };

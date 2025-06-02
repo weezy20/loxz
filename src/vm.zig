@@ -1,4 +1,4 @@
-const STACK_MAX = 512;
+const STACK_MAX = 1 << 16 + 1024; // u16 max locals + 1024 for temporaries.
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();

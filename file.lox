@@ -13,8 +13,11 @@
 
 
 var breakfast = "beignets";
-breakfast = "oops woke up late, anyways eating ";
-var beverage = "cafe au lait";
-breakfast = breakfast + "beignets with " + beverage;
+{ 
+
+    breakfast = "oops woke up late, anyways eating ";
+    var beverage = "cafe au lait";
+    breakfast = breakfast + "beignets with " + beverage;
+}
 
 print breakfast;
