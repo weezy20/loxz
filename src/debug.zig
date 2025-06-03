@@ -15,11 +15,11 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
             .CONSTANT, .CONSTANT_LONG => byte_offset + 1,
             else => byte_offset,
         };
-        const location: Location = if (d.getLocation(offset)) |loc| loc else {
+        const line = if (d.getLine(offset)) |loc| loc else {
             break :blk EMPTY;
         };
 
-        const str = std.fmt.allocPrint(allocator, "(line:{d})", .{location.line}) catch DEBUG_ALLOC_FAILED;
+        const str = std.fmt.allocPrint(allocator, "(line:{d})", .{line}) catch DEBUG_ALLOC_FAILED;
 
         break :blk str;
     } else EMPTY;
@@ -126,9 +126,9 @@ pub const Location = struct {
     /// Source line number generating the bytecode at offset
     line: usize,
     /// Column number generating the bytecode at offset
-    start_column: usize,
+    start_column: ?usize = null,
     /// End column number generating the bytecode at offset
-    end_column: usize,
+    end_column: ?usize = null,
 };
 
 /// Represents a run of instructions from the same line
@@ -141,7 +141,7 @@ const LineRun = struct {
     line: usize,
 };
 
-/// Column information for an instruction, part of a `LineRun
+/// Column information for an instruction, part of a `LineRun`
 const ColumnSpan = struct {
     /// Bytecode offset of the instruction in a chunk
     offset: usize,
@@ -158,13 +158,15 @@ pub const DebugInfo = struct {
     /// Compressed line information
     line_runs: std.ArrayList(LineRun),
     /// Source line location indexed by bytecode offset
-    col_spans: std.ArrayList(ColumnSpan),
+    col_spans: ?std.ArrayList(ColumnSpan) = null,
 
     pub const InitCapacity = struct {
         /// Initial capacity for line runs
         line_capacity: ?usize = null,
         /// Initial capacity for column spans
         col_capacity: ?usize = null,
+        /// Enable column spans, defaults to false
+        enable_column_spans: bool = false,
     };
 
     /// Initialize `DebugInfo` for a chunk. `line_capacity` and `col_capacity` are optional parameters to
@@ -174,20 +176,35 @@ pub const DebugInfo = struct {
         const lc = options.line_capacity orelse 8;
         const cc = options.col_capacity orelse 8;
         const line_runs = try std.ArrayList(LineRun).initCapacity(allocator, lc);
-        const col_spans = try std.ArrayList(ColumnSpan).initCapacity(allocator, cc);
+        if (options.enable_column_spans) {
+            return DebugInfo{
+                .line_runs = line_runs,
+                .col_spans = try std.ArrayList(ColumnSpan).initCapacity(allocator, cc),
+            };
+        }
         return DebugInfo{
             .line_runs = line_runs,
-            .col_spans = col_spans,
+            .col_spans = null, // No column spans by default
         };
     }
     /// Free the DebugInfo
     pub fn deinit(self: *DebugInfo) void {
         self.line_runs.deinit();
-        self.col_spans.deinit();
+        if (self.col_spans) |cols| {
+            cols.deinit();
+        }
     }
 
     /// Get location for a given bytecode offset
     pub fn getLocation(self: *DebugInfo, offset: usize) ?Location {
+        if (self.col_spans == null) {
+            // No column spans, return only line information
+            const line = self.getLine(offset) orelse return null;
+            return Location{
+                .offset = offset,
+                .line = line,
+            };
+        }
         const BIN_SEARCH_THRESHOLD = 50;
         const line_runs = self.line_runs.items;
 
@@ -279,13 +296,15 @@ pub const DebugInfo = struct {
     }
 
     /// Add a location to DebugInfo (now using compressed format)
+    /// If colspan is not provided it defaults to 0 for both start and end columns
     pub fn addLocation(self: *DebugInfo, location: Location) !void {
-        // Always add column information
-        try self.col_spans.append(.{
-            .offset = location.offset,
-            .start_column = location.start_column,
-            .end_column = location.end_column,
-        });
+        if (self.col_spans) |*cols| {
+            try cols.append(.{
+                .offset = location.offset,
+                .start_column = location.start_column orelse 0,
+                .end_column = location.end_column orelse 0,
+            });
+        }
 
         // Handle line runs compression
         const line_runs = &self.line_runs;

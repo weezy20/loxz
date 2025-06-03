@@ -79,7 +79,7 @@ fn emitByte(byte: u8) CompilerError!void {
             byte,
             d,
             parser.previous.line,
-            spanInfo(),
+            null,
         ) catch {
             return CompilerError.OutOfMemory;
         };

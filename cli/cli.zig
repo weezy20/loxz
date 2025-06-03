@@ -171,7 +171,7 @@ fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Alloc
     defer chunk.deinit();
     var compiler = lib.Compiler.init(allocator, &chunk);
     const compile_result = lib.compile(&compiler, source, vm, allocator, .{
-        .debug = config.debug,
+        .debug = true, // Setup DebugInfo unconditionally
         .debug_level = config.debug_level,
         .repl_mode = config.repl_mode,
     });
