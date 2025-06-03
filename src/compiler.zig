@@ -307,12 +307,15 @@ fn endScope() void {
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
-/// Parse a statement
-/// statement      → exprStmt
-///               | printStmt
-///               | block ;
+
 fn ifStatement() void {
-     
+    consume(TokenType.LeftParen, "Expect '(' after 'if'.");
+    expression(); // if condition
+    consume(TokenType.RightParen, "Expect ')' after condition.");
+
+    const thenJump = emitJump(op.JUMP_IF_FALSE) catch @panic(BYTECODE_FAIL);
+    statement(); // then block
+    patchJump(thenJump);
 }
 /// Parse a statement
 /// statement      → exprStmt
@@ -332,7 +335,7 @@ fn statement() void {
         },
         TokenType.If => {
             ifStatement();
-        }
+        },
         else => {
             expressionStatement();
         },
