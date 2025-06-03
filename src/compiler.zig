@@ -513,7 +513,7 @@ pub fn compile(
     source: []const u8,
     vm: *VM,
     allocator: std.mem.Allocator,
-    opts: ?struct {
+    opts: struct {
         debug: bool,
         debug_level: ?u8,
         repl_mode: bool,
@@ -523,21 +523,20 @@ pub fn compile(
     parser.allocator = allocator;
     parser.vm = vm;
     parser.scanner = Scanner.init(source);
-    if (opts) |o| {
-        if (o.debug) {
-            // Allocate DebugInfo on the heap
-            const di_ptr = allocator.create(DebugInfo) catch {
-                @panic("Failed to allocate debug info");
-            };
-            di_ptr.* = DebugInfo.init(allocator, .{}) catch {
-                allocator.destroy(di_ptr);
-                @panic("Failed to initialize debug info");
-            };
-            parser.debugInfo = di_ptr;
-        }
-        if (o.debug_level) |lvl| debug_level = lvl;
-        parser.repl_mode = o.repl_mode;
+    if (opts.debug) {
+        // Allocate DebugInfo on the heap
+        const di_ptr = allocator.create(DebugInfo) catch {
+            @panic("Failed to allocate debug info");
+        };
+        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+            allocator.destroy(di_ptr);
+            @panic("Failed to initialize debug info");
+        };
+        parser.debugInfo = di_ptr;
     }
+    if (opts.debug_level) |lvl| debug_level = lvl;
+    parser.repl_mode = opts.repl_mode;
+
     advance();
     while (!match(TokenType.Eof)) {
         declaration();
