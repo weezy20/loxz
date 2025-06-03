@@ -311,22 +311,31 @@ fn endScope() void {
 /// statement      → exprStmt
 ///               | printStmt
 ///               | block ;
+fn ifStatement() void {
+     
+}
+/// Parse a statement
+/// statement      → exprStmt
+///               | printStmt
+///               | block ;
 fn statement() void {
-    if (match(TokenType.Print)) { // print statement
-        printStatement();
-    } else if (match(TokenType.LeftBrace)) { // block
-        // Block statement
-        // cc.scopeDepth += 1;
-        // while (!check(TokenType.RightBrace) and !check(TokenType.Eof)) {
-        //     declaration();
-        // }
-        // consume(TokenType.RightBrace, "Expect '}' after block.");
-        // cc.scopeDepth -= 1;
-        beginScope();
-        block();
-        endScope();
-    } else { // expression statement
-        expressionStatement();
+    switch (parser.current.tokenType) {
+        TokenType.Print => {
+            advance();
+            printStatement();
+        },
+        TokenType.LeftBrace => {
+            advance();
+            beginScope();
+            block();
+            endScope();
+        },
+        TokenType.If => {
+            ifStatement();
+        }
+        else => {
+            expressionStatement();
+        },
     }
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
