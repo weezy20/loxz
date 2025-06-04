@@ -119,8 +119,10 @@ const emit = struct {
     fn ops(opcodes: []const op) void {
         for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
     }
-    fn jump(b: op) CompilerError!usize {
-        try emitU16Op(b, 0xffff); // equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
+    /// Returns the offset of the jump placeholder operand in the current chunk.
+    fn jump(b: op) usize {
+        emitU16Op(b, 0xffff) catch @panic(BYTECODE_FAIL);
+        // ^^^ equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
         return currentChunk().count - 2;
     }
 };
@@ -312,15 +314,28 @@ fn endScope() void {
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
-fn patchJump(then: usize) void {
-    _ = then;
+/// `offset` is the jump placeholder to be patched.
+fn patchJump(placeholder_addr: usize) void {
+    // -2 to adjust for the bytecode for the jump offset itself.
+    // Because, placeholder_addr points to the start of the 2 byte operand of the jump instruction.
+    // I find a bit confusing how the book describes it, but nothing a bit of parentheses can't fix.
+    // The book writes: `jumpOffset = currentChunk().count - placeholder_addr - 2;`
+    // currentChunk().count will point to the next byte after the `then` block has ended compiling.
+    const jumpOffset: usize = currentChunk().count - (placeholder_addr + 2);
+    if (jumpOffset > std.math.maxInt(u16)) {
+        Error("Too much code to jump over.");
+        return;
+    }
+    // Write the jump offset as a 2-byte value
+    currentChunk().code[placeholder_addr] = @intCast((jumpOffset >> 8) & 0xff); // MSB
+    currentChunk().code[placeholder_addr + 1] = @intCast(jumpOffset & 0xff); // LSB
 }
-fn ifStatement() !void {
+fn ifStatement() void {
     consume(TokenType.LeftParen, "Expect '(' after 'if'.");
     expression(); // if condition
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
-    const thenJump = try emit.jump(op.JUMP_IF_FALSE);
+    const thenJump = emit.jump(op.JUMP_IF_FALSE);
     statement(); // then block
     patchJump(thenJump);
 }
@@ -328,7 +343,7 @@ fn ifStatement() !void {
 /// statement      → exprStmt
 ///               | printStmt
 ///               | block ;
-fn statement() !void {
+fn statement() void {
     switch (parser.current.tokenType) {
         TokenType.Print => {
             advance();
@@ -341,7 +356,7 @@ fn statement() !void {
             endScope();
         },
         TokenType.If => {
-            try ifStatement();
+            ifStatement();
         },
         else => {
             expressionStatement();
@@ -445,8 +460,8 @@ fn defineVariable(global: usize) void {
     emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
-fn declaration() !void {
-    if (match(TokenType.Var)) varDeclaration() else try statement();
+fn declaration() void {
+    if (match(TokenType.Var)) varDeclaration() else statement();
     if (parser.panic_mode) synchronize();
 }
 /// Mark the last local variable as initialized.
@@ -555,27 +570,15 @@ pub fn compile(
     }
     if (opts.debug_level) |lvl| debug_level = lvl;
     parser.repl_mode = opts.repl_mode;
-    var err_list: ?std.ArrayList(CompilerError) = null;
     advance();
     while (!match(TokenType.Eof)) {
-        declaration() catch |c_err| {
-            if (err_list == null) {
-                err_list = std.ArrayList(CompilerError).init(allocator);
-            }
-            err_list.append(c_err) catch |err| {
-                std.debug.print("Failed to append error to list: {s}\n", .{@errorName(err)});
-            };
-        };
+        declaration();
     }
     const retval: CompilationResult = .{
         .success = !parser.had_error,
         .debugInfo = parser.debugInfo,
-        .err = err_list,
     };
     endCompiler(allocator) catch |err| {
-        if (err_list) |list| {
-            list.append(err) catch {};
-        }
         std.debug.print("[Compiler]: Failed to emit OP_RETURN: {s}\n", .{@errorName(err)});
     };
     return retval;
@@ -722,7 +725,6 @@ const rules = [_]ParseRule{
 const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
-    err: ?std.ArrayList(CompilerError),
 };
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
