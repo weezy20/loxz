@@ -54,9 +54,9 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),
         .GET_LOCAL => return U16Instruction("OP_GET_LOCAL", chunk, byte_offset, src_info),
         .SET_LOCAL => return U16Instruction("OP_SET_LOCAL", chunk, byte_offset, src_info),
-        // else => {chunk,
-        //     return 0;
-        // },
+        else => {
+            return byte_offset + 1;
+        },
     }
 }
 

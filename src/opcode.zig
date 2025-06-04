@@ -29,4 +29,6 @@ pub const OpCode = enum(u8) {
     // Locals
     GET_LOCAL,
     SET_LOCAL,
+    // Control flow
+    JUMP_IF_FALSE,
 };

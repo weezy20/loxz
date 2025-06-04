@@ -112,11 +112,16 @@ fn emitU16Op(b: op, arg: usize) CompilerError!void {
     try emitByte(@intCast(arg & 0xff)); // LSB
 }
 const emit = struct {
+    const Self = @This();
     fn byte(b: op) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
     fn ops(opcodes: []const op) void {
         for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
+    }
+    fn jump(b: op) CompilerError!usize {
+        try emitU16Op(b, 0xffff); // equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
+        return currentChunk().count - 2;
     }
 };
 
@@ -307,13 +312,15 @@ fn endScope() void {
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
-
-fn ifStatement() void {
+fn patchJump(then: usize) void {
+    _ = then;
+}
+fn ifStatement() !void {
     consume(TokenType.LeftParen, "Expect '(' after 'if'.");
     expression(); // if condition
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
-    const thenJump = emitJump(op.JUMP_IF_FALSE) catch @panic(BYTECODE_FAIL);
+    const thenJump = try emit.jump(op.JUMP_IF_FALSE);
     statement(); // then block
     patchJump(thenJump);
 }
@@ -321,7 +328,7 @@ fn ifStatement() void {
 /// statement      → exprStmt
 ///               | printStmt
 ///               | block ;
-fn statement() void {
+fn statement() !void {
     switch (parser.current.tokenType) {
         TokenType.Print => {
             advance();
@@ -334,7 +341,7 @@ fn statement() void {
             endScope();
         },
         TokenType.If => {
-            ifStatement();
+            try ifStatement();
         },
         else => {
             expressionStatement();
@@ -438,8 +445,8 @@ fn defineVariable(global: usize) void {
     emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
-fn declaration() void {
-    if (match(TokenType.Var)) varDeclaration() else statement();
+fn declaration() !void {
+    if (match(TokenType.Var)) varDeclaration() else try statement();
     if (parser.panic_mode) synchronize();
 }
 /// Mark the last local variable as initialized.
@@ -548,18 +555,28 @@ pub fn compile(
     }
     if (opts.debug_level) |lvl| debug_level = lvl;
     parser.repl_mode = opts.repl_mode;
-
+    var err_list: ?std.ArrayList(CompilerError) = null;
     advance();
     while (!match(TokenType.Eof)) {
-        declaration();
+        declaration() catch |c_err| {
+            if (err_list == null) {
+                err_list = std.ArrayList(CompilerError).init(allocator);
+            }
+            err_list.append(c_err) catch |err| {
+                std.debug.print("Failed to append error to list: {s}\n", .{@errorName(err)});
+            };
+        };
     }
-    var retval: CompilationResult = .{
+    const retval: CompilationResult = .{
         .success = !parser.had_error,
         .debugInfo = parser.debugInfo,
-        .err = null,
+        .err = err_list,
     };
     endCompiler(allocator) catch |err| {
-        retval.err = err;
+        if (err_list) |list| {
+            list.append(err) catch {};
+        }
+        std.debug.print("[Compiler]: Failed to emit OP_RETURN: {s}\n", .{@errorName(err)});
     };
     return retval;
 }
@@ -705,7 +722,7 @@ const rules = [_]ParseRule{
 const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
-    err: ?CompilerError,
+    err: ?std.ArrayList(CompilerError),
 };
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
