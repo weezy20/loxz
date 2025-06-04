@@ -376,6 +376,20 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const slot = self.readU16();
                 self.stack[slot] = self.peek(0);
             },
+            .JUMP => {
+                const offset = self.readU16();
+                self.ip += offset;
+            },
+            .JUMP_IF_FALSE => {
+                const offset = self.readU16();
+                if (self.peek(0).isFalsey()) {
+                    self.ip += offset;
+                }
+            },
+            else => {
+                self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
+                return RuntimeError.UnknownOpCode;
+            },
         }
     }
 }

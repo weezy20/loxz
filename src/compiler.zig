@@ -336,10 +336,17 @@ fn ifStatement() void {
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
     const thenJump = emit.jump(op.JUMP_IF_FALSE);
+    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value
     statement(); // then block
+
+    const elseJump = emit.jump(op.JUMP);
     patchJump(thenJump);
+
+    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value
+    if (match(TokenType.Else)) statement();
+    patchJump(elseJump);
 }
-/// Parse a statement
+/// Parse a statement: statements don't leave anything on the stack.
 /// statement      → exprStmt
 ///               | printStmt
 ///               | block ;
