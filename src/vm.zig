@@ -386,10 +386,10 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.ip += offset;
                 }
             },
-            else => {
-                self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
-                return RuntimeError.UnknownOpCode;
-            },
+            // else => {
+            //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
+            //     return RuntimeError.UnknownOpCode;
+            // },
         }
     }
 }

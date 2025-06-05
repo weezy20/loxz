@@ -108,7 +108,7 @@ pub const Value = union(enum) {
         return switch (self.*) {
             .Nil => true,
             .Bool => |b| !b,
-            .Number => |n| n == 0.0 or std.math.isNaN(n),
+            .Number => |n| n == 0.0 or n != n,
             else => false,
         };
     }

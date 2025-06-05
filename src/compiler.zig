@@ -338,13 +338,13 @@ fn ifStatement() void {
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
     const thenJump = emit.jump(op.JUMP_IF_FALSE);
-    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value if condition was true
+    emit.byte(op.POP); // Pop the condition value if condition was true
     statement(); // then block
 
     const elseJump = emit.jump(op.JUMP); // jump over else block
     patchJump(thenJump); // if true, we resume after the else jump instruction but before the else block
 
-    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value, if condition was falsey
+    emit.byte(op.POP); // Pop the condition value, if condition was falsey
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
@@ -365,6 +365,7 @@ fn statement() void {
             endScope();
         },
         TokenType.If => {
+            advance();
             ifStatement();
         },
         else => {
