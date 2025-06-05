@@ -358,7 +358,7 @@ fn emitLoop(loop_start: usize) void {
         Error("Loop body too large.");
         return;
     }
-    emitBytes(.{ @truncate((offset >> 8) & 0xff), @truncate(offset & 0xff) }) catch @panic(BYTECODE_FAIL);
+    emitBytes(&[_]u8{ @truncate((offset >> 8) & 0xff), @truncate(offset & 0xff) }) catch @panic(BYTECODE_FAIL);
 }
 fn whileStatement() void {
     const loop_start = currentChunk().count;
