@@ -714,7 +714,7 @@ const rules = [_]ParseRule{
     // TOKEN_NUMBER
     ParseRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
     // TOKEN_AND
-    ParseRule{ .prefix = null, .infix = logical_and, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_and, .precedence = Precedence.And },
     // TOKEN_CLASS
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_ELSE
@@ -730,7 +730,7 @@ const rules = [_]ParseRule{
     // TOKEN_NIL
     ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_OR
-    ParseRule{ .prefix = null, .infix = logical_or, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_or, .precedence = Precedence.Or },
     // TOKEN_PRINT
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_RETURN
