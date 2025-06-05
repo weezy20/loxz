@@ -254,6 +254,25 @@ fn unary() void {
         else => return,
     }
 }
+/// Logical `and` operator
+fn logical_and() void {
+    const end_jump = emit.jump(op.JUMP_IF_FALSE); // Skip the right operand
+    emit.byte(op.POP); // Pop the left operand
+    parsePrecedence(Precedence.And); // Parse the right operand
+    patchJump(end_jump); // Patch the jump to skip the right operand if the left operand is truthy
+}
+/// Logical `or` operator
+fn logical_or() void {
+    const elseJump = emit.jump(op.JUMP_IF_FALSE);
+    const endJump = emit.jump(op.JUMP); // if left is truthy, we jump to the end
+
+    patchJump(elseJump); // If left is falsey, we jump to the right operand
+    emit.byte(op.POP);
+    parsePrecedence(Precedence.Or);
+    patchJump(endJump); // if left was true, we jump and land here i.e. after the right operand
+    // True i.e. left operand is left on the stack here.. if op.JUMP was executed, otherwise it's the value of the right operand
+}
+
 /// Parses an expression upto the provided precedence
 fn parsePrecedence(precedence: Precedence) void {
     advance();
@@ -695,7 +714,7 @@ const rules = [_]ParseRule{
     // TOKEN_NUMBER
     ParseRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
     // TOKEN_AND
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_and, .precedence = Precedence.None },
     // TOKEN_CLASS
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_ELSE
@@ -711,7 +730,7 @@ const rules = [_]ParseRule{
     // TOKEN_NIL
     ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_OR
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_or, .precedence = Precedence.None },
     // TOKEN_PRINT
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_RETURN
