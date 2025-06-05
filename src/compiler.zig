@@ -351,6 +351,22 @@ fn patchJump(placeholder_addr: usize) void {
     currentChunk().code[placeholder_addr] = @intCast((jumpOffset >> 8) & 0xff); // MSB
     currentChunk().code[placeholder_addr + 1] = @intCast(jumpOffset & 0xff); // LSB
 }
+fn emitLoop(loop_start: usize) void {
+    emit.byte(op.LOOP);
+}
+fn whileStatement() void {
+    const loop_start = currentChunk().count;
+    consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+    expression(); // while condition
+    consume(TokenType.RightParen, "Expect ')' after condition.");
+
+    const exitJump = emit.jump(op.JUMP_IF_FALSE);
+    emit.byte(op.POP); // Pop while-condition from stack
+    statement();
+    emitLoop(loop_start);
+    patchJump(exitJump);
+    emit.byte(op.POP); // Pop while-condition from stack
+}
 fn ifStatement() void {
     consume(TokenType.LeftParen, "Expect '(' after 'if'.");
     expression(); // if condition
@@ -386,6 +402,10 @@ fn statement() void {
         TokenType.If => {
             advance();
             ifStatement();
+        },
+        TokenType.While => {
+            advance();
+            whileStatement();
         },
         else => {
             expressionStatement();
