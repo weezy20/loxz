@@ -169,12 +169,16 @@ pub const Chunk = struct {
     pub fn disassemble(self: *const Chunk, allocator: std.mem.Allocator, name: ?[]const u8, debugInfo: ?*DebugInfo) !void {
         dbg("=== <{s}> === >>\n", .{name orelse "chunk"});
         var offset: usize = 0;
+        var index: usize = 0;
         while (offset < self.count) : (offset = debug.disassembleInstruction(
             self,
             offset,
             allocator,
             .{ .debugInfo = debugInfo, .prefix = name orelse "CHUNK" },
-        )) {}
+        )) {
+            std.io.getStdOut().writer().print("\x1b[33m{d} \x1b[0m", .{index}) catch {};
+            index += 1;
+        }
         if (offset > 0) {
             dbg("=== <{s}> === <<\n", .{name orelse "chunk"});
         }

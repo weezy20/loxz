@@ -54,9 +54,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),
         .GET_LOCAL => return U16Instruction("OP_GET_LOCAL", chunk, byte_offset, src_info),
         .SET_LOCAL => return U16Instruction("OP_SET_LOCAL", chunk, byte_offset, src_info),
-        else => {
-            return byte_offset + 1;
-        },
+        .JUMP => return jumpInstruction("OP_JUMP", .POSITIVE, chunk, byte_offset, src_info),
+        .JUMP_IF_FALSE => return jumpInstruction("OP_JUMP_IF_FALSE", .POSITIVE, chunk, byte_offset, src_info),
     }
 }
 
@@ -117,6 +116,29 @@ fn U16Instruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info
     };
     return offset + 3;
 }
+
+fn jumpInstruction(name: []const u8, sign: Sign, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    const jump_offset = @as(usize, chunk.code[offset + 1]) << 8 | @as(usize, chunk.code[offset + 2]);
+    stderr.print("{0s} (jump offset: {1d}_u16)\t{2s}\n", .{ name, jump_offset, src_info }) catch {
+        dbg("Failed to print jump offset", .{});
+    };
+    var offset_after_jump = offset + 3;
+    if (sign == .NEGATIVE) {
+        // Negative jump
+        offset_after_jump -= jump_offset;
+    } else {
+        // Positive jump
+        offset_after_jump += jump_offset;
+    }
+    return offset_after_jump;
+}
+
+const Sign = enum {
+    /// Positive jump
+    POSITIVE,
+    /// Negative jump
+    NEGATIVE,
+};
 
 /// Location for chunk bytecode
 /// Used by write functions when creating bytecode for a given chunk
