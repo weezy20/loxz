@@ -389,6 +389,27 @@ fn ifStatement() void {
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
+fn forStatement() void {
+    // > For loop initializer
+    consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+    if (match(TokenType.Semicolon)) {
+        // Empty initializer
+    } else if (match(TokenType.Var)) {
+        varDeclaration();
+    } else {
+        expressionStatement();
+    }
+    consume(TokenType.Semicolon, "Expect ';' after for initializer.");
+    // < For loop initializer
+    // > For loop condition start
+    const loop_start = currentChunk().count;
+    consume(TokenType.Semicolon, "Expect ';' after for condition.");
+    // < For loop condition end
+    consume(TokenType.RightParen, "Expect ')' after for clauses.");
+
+    statement();
+    emitLoop(loop_start);
+}
 /// Parse a statement: statements don't leave anything on the stack.
 /// statement      → exprStmt
 ///               | printStmt
@@ -412,6 +433,10 @@ fn statement() void {
         TokenType.While => {
             advance();
             whileStatement();
+        },
+        TokenType.For => {
+            advance();
+            forStatement();
         },
         else => {
             expressionStatement();
