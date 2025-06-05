@@ -32,4 +32,5 @@ pub const OpCode = enum(u8) {
     // Control flow
     JUMP,
     JUMP_IF_FALSE,
+    LOOP,
 };

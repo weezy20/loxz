@@ -353,6 +353,12 @@ fn patchJump(placeholder_addr: usize) void {
 }
 fn emitLoop(loop_start: usize) void {
     emit.byte(op.LOOP);
+    const offset = currentChunk().count - loop_start + 2; // +2 for the LOOP 2-byte operand which also needs to be jumped over.
+    if (offset > std.math.maxInt(u16)) {
+        Error("Loop body too large.");
+        return;
+    }
+    emitBytes(.{ @truncate((offset >> 8) & 0xff), @truncate(offset & 0xff) }) catch @panic(BYTECODE_FAIL);
 }
 fn whileStatement() void {
     const loop_start = currentChunk().count;
@@ -361,11 +367,11 @@ fn whileStatement() void {
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
     const exitJump = emit.jump(op.JUMP_IF_FALSE);
-    emit.byte(op.POP); // Pop while-condition from stack
+    emit.byte(op.POP); // Pop while-condition from stack, put on stack on every iteration
     statement();
     emitLoop(loop_start);
     patchJump(exitJump);
-    emit.byte(op.POP); // Pop while-condition from stack
+    emit.byte(op.POP); // Pop while-condition from stack when the loop exists due to condition being falsey
 }
 fn ifStatement() void {
     consume(TokenType.LeftParen, "Expect '(' after 'if'.");

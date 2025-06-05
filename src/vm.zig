@@ -386,6 +386,10 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.ip += offset;
                 }
             },
+            .LOOP => {
+                const offset = self.readU16();
+                self.ip -= offset;
+            },
             // else => {
             //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
             //     return RuntimeError.UnknownOpCode;
