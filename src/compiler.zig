@@ -119,7 +119,9 @@ const emit = struct {
     fn ops(opcodes: []const op) void {
         for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
     }
+    /// Emit a jump instruction.
     /// Returns the offset of the jump placeholder operand in the current chunk.
+    /// Use `patchJump` to fill in the jump offset later.
     fn jump(b: op) usize {
         emitU16Op(b, 0xffff) catch @panic(BYTECODE_FAIL);
         // ^^^ equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
@@ -336,13 +338,13 @@ fn ifStatement() void {
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
     const thenJump = emit.jump(op.JUMP_IF_FALSE);
-    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value
+    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value if condition was true
     statement(); // then block
 
-    const elseJump = emit.jump(op.JUMP);
-    patchJump(thenJump);
+    const elseJump = emit.jump(op.JUMP); // jump over else block
+    patchJump(thenJump); // if true, we resume after the else jump instruction but before the else block
 
-    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value
+    emit.byte(op.POP) catch @panic(BYTECODE_FAIL); // Pop the condition value, if condition was falsey
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
