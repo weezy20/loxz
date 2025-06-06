@@ -425,13 +425,13 @@ fn forStatement() void {
     // < For loop increment clause
     // > Loop body
     statement();
+    // < Loop body
     emitLoop(loop_start);
     if (exitJump) |exit_jump| {
         patchJump(exit_jump);
         emit.byte(op.POP);
     }
     endScope();
-    // < Loop body
 }
 /// Parse a statement: statements don't leave anything on the stack.
 /// statement      → exprStmt
