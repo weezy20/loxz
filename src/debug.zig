@@ -120,9 +120,6 @@ fn U16Instruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info
 
 fn jumpInstruction(name: []const u8, sign: Sign, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
     const jump_offset = @as(usize, chunk.code[offset + 1]) << 8 | @as(usize, chunk.code[offset + 2]);
-    stderr.print("{0s} (jump offset: {1d}_u16)\t{2s}\n", .{ name, jump_offset, src_info }) catch {
-        dbg("Failed to print jump offset", .{});
-    };
     var offset_after_jump = offset + 3;
     if (sign == .NEGATIVE) {
         // Negative jump
@@ -131,7 +128,10 @@ fn jumpInstruction(name: []const u8, sign: Sign, chunk: *const Chunk, offset: us
         // Positive jump
         offset_after_jump += jump_offset;
     }
-    return offset_after_jump;
+    stderr.print("{0s} (jump offset: {1d} -> {2d})\t{3s}\n", .{ name, offset, offset_after_jump, src_info }) catch {
+        dbg("Failed to print jump offset", .{});
+    };
+    return offset + 3;
 }
 
 const Sign = enum {
