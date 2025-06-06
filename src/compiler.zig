@@ -413,14 +413,14 @@ fn forStatement() void {
     // < For loop condition end
     // > For loop increment clause
     if (!match(TokenType.RightParen)) {
-        const bodyJump = emit.jump(op.JUMP);
+        const bodyJump = emit.jump(op.JUMP); // Jump to the loop body without executing the increment clause
         const incrementStart = currentChunk().count;
         expression();
         emit.byte(op.POP); // Pop the increment value
         consume(TokenType.RightParen, "Expect ')' after for clauses.");
         emitLoop(loop_start); // Jump back to the start of the loop
         loop_start = incrementStart; // Update loop_start to the start of the increment clause
-        patchJump(bodyJump);
+        patchJump(bodyJump); // body starts here
     }
     // < For loop increment clause
     // > Loop body
