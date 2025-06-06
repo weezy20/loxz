@@ -79,7 +79,7 @@ fn emitByte(byte: u8) CompilerError!void {
             byte,
             d,
             parser.previous.line,
-            spanInfo(),
+            null,
         ) catch {
             return CompilerError.OutOfMemory;
         };
@@ -112,11 +112,20 @@ fn emitU16Op(b: op, arg: usize) CompilerError!void {
     try emitByte(@intCast(arg & 0xff)); // LSB
 }
 const emit = struct {
+    const Self = @This();
     fn byte(b: op) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
     fn ops(opcodes: []const op) void {
         for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
+    }
+    /// Emit a jump instruction.
+    /// Returns the offset of the jump placeholder operand in the current chunk.
+    /// Use `patchJump` to fill in the jump offset later.
+    fn jump(b: op) usize {
+        emitU16Op(b, 0xffff) catch @panic(BYTECODE_FAIL);
+        // ^^^ equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
+        return currentChunk().count - 2;
     }
 };
 
@@ -245,6 +254,25 @@ fn unary() void {
         else => return,
     }
 }
+/// Logical `and` operator
+fn logical_and() void {
+    const end_jump = emit.jump(op.JUMP_IF_FALSE); // Skip the right operand
+    emit.byte(op.POP); // Pop the left operand
+    parsePrecedence(Precedence.And); // Parse the right operand
+    patchJump(end_jump); // Patch the jump to skip the right operand if the left operand is truthy
+}
+/// Logical `or` operator
+fn logical_or() void {
+    const elseJump = emit.jump(op.JUMP_IF_FALSE);
+    const endJump = emit.jump(op.JUMP); // if left is truthy, we jump to the end
+
+    patchJump(elseJump); // If left is falsey, we jump to the right operand
+    emit.byte(op.POP);
+    parsePrecedence(Precedence.Or);
+    patchJump(endJump); // if left was true, we jump and land here i.e. after the right operand
+    // True i.e. left operand is left on the stack here.. if op.JUMP was executed, otherwise it's the value of the right operand
+}
+
 /// Parses an expression upto the provided precedence
 fn parsePrecedence(precedence: Precedence) void {
     advance();
@@ -307,26 +335,135 @@ fn endScope() void {
         emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
-/// Parse a statement
+/// `offset` is the jump placeholder to be patched.
+fn patchJump(placeholder_addr: usize) void {
+    // -2 to adjust for the bytecode for the jump offset itself.
+    // Because, placeholder_addr points to the start of the 2 byte operand of the jump instruction.
+    // I find a bit confusing how the book describes it, but nothing a bit of parentheses can't fix.
+    // The book writes: `jumpOffset = currentChunk().count - placeholder_addr - 2;`
+    // currentChunk().count will point to the next byte after the `then` block has ended compiling.
+    const jumpOffset: usize = currentChunk().count - (placeholder_addr + 2);
+    if (jumpOffset > std.math.maxInt(u16)) {
+        Error("Too much code to jump over.");
+        return;
+    }
+    // Write the jump offset as a 2-byte value
+    currentChunk().code[placeholder_addr] = @intCast((jumpOffset >> 8) & 0xff); // MSB
+    currentChunk().code[placeholder_addr + 1] = @intCast(jumpOffset & 0xff); // LSB
+}
+fn emitLoop(loop_start: usize) void {
+    emit.byte(op.LOOP);
+    const offset = currentChunk().count - loop_start + 2; // +2 for the LOOP 2-byte operand which also needs to be jumped over.
+    if (offset > std.math.maxInt(u16)) {
+        Error("Loop body too large.");
+        return;
+    }
+    emitBytes(&[_]u8{ @truncate((offset >> 8) & 0xff), @truncate(offset & 0xff) }) catch @panic(BYTECODE_FAIL);
+}
+fn whileStatement() void {
+    const loop_start = currentChunk().count;
+    consume(TokenType.LeftParen, "Expect '(' after 'while'.");
+    expression(); // while condition
+    consume(TokenType.RightParen, "Expect ')' after condition.");
+
+    const exitJump = emit.jump(op.JUMP_IF_FALSE);
+    emit.byte(op.POP); // Pop while-condition from stack, put on stack on every iteration
+    statement();
+    emitLoop(loop_start);
+    patchJump(exitJump);
+    emit.byte(op.POP); // Pop while-condition from stack when the loop exists due to condition being falsey
+}
+fn ifStatement() void {
+    consume(TokenType.LeftParen, "Expect '(' after 'if'.");
+    expression(); // if condition
+    consume(TokenType.RightParen, "Expect ')' after condition.");
+
+    const thenJump = emit.jump(op.JUMP_IF_FALSE);
+    emit.byte(op.POP); // Pop the condition value if condition was true
+    statement(); // then block
+
+    const elseJump = emit.jump(op.JUMP); // jump over else block
+    patchJump(thenJump); // if true, we resume after the else jump instruction but before the else block
+
+    emit.byte(op.POP); // Pop the condition value, if condition was falsey
+    if (match(TokenType.Else)) statement();
+    patchJump(elseJump);
+}
+fn forStatement() void {
+    beginScope();
+    // > For loop initializer
+    consume(TokenType.LeftParen, "Expect '(' after 'for'.");
+    if (match(TokenType.Semicolon)) {
+        // Empty initializer
+    } else if (match(TokenType.Var)) {
+        varDeclaration();
+    } else {
+        expressionStatement();
+    }
+    // < For loop initializer
+    // > For loop condition start
+    var loop_start = currentChunk().count;
+    var exitJump: ?usize = null;
+    if (!match(TokenType.Semicolon)) {
+        expression();
+        consume(TokenType.Semicolon, "Expect ';' after loop condition.");
+        exitJump = emit.jump(op.JUMP_IF_FALSE);
+        emit.byte(op.POP);
+    }
+    // < For loop condition end
+    // > For loop increment clause
+    if (!match(TokenType.RightParen)) {
+        const bodyJump = emit.jump(op.JUMP); // Jump to the loop body without executing the increment clause
+        const incrementStart = currentChunk().count;
+        expression();
+        emit.byte(op.POP); // Pop the increment value
+        consume(TokenType.RightParen, "Expect ')' after for clauses.");
+        emitLoop(loop_start); // Jump back to the start of the loop
+        loop_start = incrementStart; // Update loop_start to the start of the increment clause
+        patchJump(bodyJump); // body starts here
+    }
+    // < For loop increment clause
+    // > Loop body
+    statement();
+    // < Loop body
+    emitLoop(loop_start);
+    if (exitJump) |exit_jump| {
+        patchJump(exit_jump);
+        emit.byte(op.POP);
+    }
+    endScope();
+}
+/// Parse a statement: statements don't leave anything on the stack.
 /// statement      → exprStmt
 ///               | printStmt
 ///               | block ;
 fn statement() void {
-    if (match(TokenType.Print)) { // print statement
-        printStatement();
-    } else if (match(TokenType.LeftBrace)) { // block
-        // Block statement
-        // cc.scopeDepth += 1;
-        // while (!check(TokenType.RightBrace) and !check(TokenType.Eof)) {
-        //     declaration();
-        // }
-        // consume(TokenType.RightBrace, "Expect '}' after block.");
-        // cc.scopeDepth -= 1;
-        beginScope();
-        block();
-        endScope();
-    } else { // expression statement
-        expressionStatement();
+    switch (parser.current.tokenType) {
+        TokenType.Print => {
+            advance();
+            printStatement();
+        },
+        TokenType.LeftBrace => {
+            advance();
+            beginScope();
+            block();
+            endScope();
+        },
+        TokenType.If => {
+            advance();
+            ifStatement();
+        },
+        TokenType.While => {
+            advance();
+            whileStatement();
+        },
+        TokenType.For => {
+            advance();
+            forStatement();
+        },
+        else => {
+            expressionStatement();
+        },
     }
 }
 /// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
@@ -513,7 +650,7 @@ pub fn compile(
     source: []const u8,
     vm: *VM,
     allocator: std.mem.Allocator,
-    opts: ?struct {
+    opts: struct {
         debug: bool,
         debug_level: ?u8,
         repl_mode: bool,
@@ -523,32 +660,29 @@ pub fn compile(
     parser.allocator = allocator;
     parser.vm = vm;
     parser.scanner = Scanner.init(source);
-    if (opts) |o| {
-        if (o.debug) {
-            // Allocate DebugInfo on the heap
-            const di_ptr = allocator.create(DebugInfo) catch {
-                @panic("Failed to allocate debug info");
-            };
-            di_ptr.* = DebugInfo.init(allocator, .{}) catch {
-                allocator.destroy(di_ptr);
-                @panic("Failed to initialize debug info");
-            };
-            parser.debugInfo = di_ptr;
-        }
-        if (o.debug_level) |lvl| debug_level = lvl;
-        parser.repl_mode = o.repl_mode;
+    if (opts.debug) {
+        // Allocate DebugInfo on the heap
+        const di_ptr = allocator.create(DebugInfo) catch {
+            @panic("Failed to allocate debug info");
+        };
+        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+            allocator.destroy(di_ptr);
+            @panic("Failed to initialize debug info");
+        };
+        parser.debugInfo = di_ptr;
     }
+    if (opts.debug_level) |lvl| debug_level = lvl;
+    parser.repl_mode = opts.repl_mode;
     advance();
     while (!match(TokenType.Eof)) {
         declaration();
     }
-    var retval: CompilationResult = .{
+    const retval: CompilationResult = .{
         .success = !parser.had_error,
         .debugInfo = parser.debugInfo,
-        .err = null,
     };
     endCompiler(allocator) catch |err| {
-        retval.err = err;
+        std.debug.print("[Compiler]: Failed to emit OP_RETURN: {s}\n", .{@errorName(err)});
     };
     return retval;
 }
@@ -654,7 +788,7 @@ const rules = [_]ParseRule{
     // TOKEN_NUMBER
     ParseRule{ .prefix = number, .infix = null, .precedence = Precedence.None },
     // TOKEN_AND
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_and, .precedence = Precedence.And },
     // TOKEN_CLASS
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_ELSE
@@ -670,7 +804,7 @@ const rules = [_]ParseRule{
     // TOKEN_NIL
     ParseRule{ .prefix = literal, .infix = null, .precedence = Precedence.None },
     // TOKEN_OR
-    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = null, .infix = logical_or, .precedence = Precedence.Or },
     // TOKEN_PRINT
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_RETURN
@@ -694,7 +828,6 @@ const rules = [_]ParseRule{
 const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
-    err: ?CompilerError,
 };
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals

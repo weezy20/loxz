@@ -2,15 +2,16 @@
 
 ### Usage
 
-Interpret a lox file. Some sample programs are provided in the `programs` folder.
+Interpret a lox file. A lox file must have `.lox` extension.
+Some sample programs are provided in the `programs` folder.
 ```sh
-loxz <file.lox> 
+loxz <OPTIONS> <file.lox>
 ```
 
 Run in REPL mode
 
 ```sh
-loxz
+loxz <OPTIONS>
 ```
 
 Flags:
@@ -22,7 +23,7 @@ Flags:
 | `-d`, `--debug`   | Enable debug output, set debug level  |
 
 ## Additional features in loxz over the standard implementation: 
-- Implemented `OP_CONSTANT_LONG` to enable 16_777_216 constants. This is flexible and 24 bits are only used after 8 bits for constant
+- Implemented `OP_CONSTANT_LONG` to enable 16_777_216 (u24) constants. This is automatically injected after we hit the 256 limit on constant pool and instruction switches from `OP_CONSTANT` to it's longer version.
 pool have been exhausted.
 - 65536 Global variables with Global cache to reduce hashtable lookups.
 - Expanded Local variables limit to 65536 (u16), no 256 local variable limit, this means we use (u16::max + 1024)*sizeof(Value) [16 bytes] for stack

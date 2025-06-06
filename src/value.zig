@@ -104,6 +104,14 @@ pub const Value = union(enum) {
         }
         return null;
     }
+    pub fn isFalsey(self: *const Value) bool {
+        return switch (self.*) {
+            .Nil => true,
+            .Bool => |b| !b,
+            .Number => |n| n == 0.0 or n != n,
+            else => false,
+        };
+    }
 };
 
 /// Value Arrays

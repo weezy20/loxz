@@ -49,13 +49,18 @@ pub const Chunk = struct {
     }
 
     /// Write a bytecode to the chunk, with DebugInfo
-    pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, span: [2]usize) !void {
+    pub fn writeWithDebugInfo(self: *Chunk, byte: u8, debugInfo: *DebugInfo, line: usize, span: ?[2]usize) !void {
         try self.write(byte);
-        const location = Location{
+        const location = if (span) |s| Location{
             .offset = self.count - 1,
             .line = line,
-            .start_column = span[0],
-            .end_column = span[1],
+            .start_column = s[0],
+            .end_column = s[1],
+        } else Location{
+            .offset = self.count - 1,
+            .line = line,
+            .start_column = 0,
+            .end_column = 0,
         };
         try debugInfo.addLocation(location);
     }
@@ -164,12 +169,16 @@ pub const Chunk = struct {
     pub fn disassemble(self: *const Chunk, allocator: std.mem.Allocator, name: ?[]const u8, debugInfo: ?*DebugInfo) !void {
         dbg("=== <{s}> === >>\n", .{name orelse "chunk"});
         var offset: usize = 0;
+        var index: usize = 0;
         while (offset < self.count) : (offset = debug.disassembleInstruction(
             self,
             offset,
             allocator,
             .{ .debugInfo = debugInfo, .prefix = name orelse "CHUNK" },
-        )) {}
+        )) {
+            std.io.getStdOut().writer().print("\x1b[33m{d} \x1b[0m", .{index}) catch {};
+            index += 1;
+        }
         if (offset > 0) {
             dbg("=== <{s}> === <<\n", .{name orelse "chunk"});
         }
