@@ -186,6 +186,7 @@ pub fn scanToken(sc: *Scanner) Token {
         '+' => return makeToken(sc, TokenType.Plus),
         '/' => return makeToken(sc, TokenType.Slash),
         '*' => return makeToken(sc, TokenType.Star),
+        '%' => return makeToken(sc, TokenType.Modulo),
         '!' => return if (sc.match('='))
             makeToken(sc, TokenType.BangEqual)
         else
@@ -292,4 +293,7 @@ pub const TokenType = enum(u8) {
     While,
     Error,
     Eof,
+
+    // Extensions
+    Modulo, // '%'
 };

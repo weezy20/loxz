@@ -294,6 +294,15 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 }
                 try self.pushNumber(div(lhs, rhs));
             },
+            .MOD => {
+                const rhs = try self.popNumber();
+                const lhs = try self.popNumber();
+                if (rhs == 0.0) {
+                    return RuntimeError.DivisionByZero;
+                }
+                // Modulo operation
+                try self.pushNumber(@mod(lhs, rhs));
+            },
             .TRUE => {
                 try self.push(Value{ .Bool = true });
             },

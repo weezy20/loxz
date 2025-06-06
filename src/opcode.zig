@@ -8,6 +8,7 @@ pub const OpCode = enum(u8) {
     SUBTRACT,
     MULTIPLY,
     DIVIDE,
+    MOD,
     // Nil
     NIL,
     // Boolean values

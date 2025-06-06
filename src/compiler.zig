@@ -227,6 +227,7 @@ fn binary() void {
         .Minus => emit.byte(op.SUBTRACT),
         .Star => emit.byte(op.MULTIPLY),
         .Slash => emit.byte(op.DIVIDE),
+        .Modulo => emit.byte(op.MOD),
         // Logical infix expression
         .BangEqual => emit.ops(&.{ op.EQUAL, op.NOT }),
         .EqualEqual => emit.byte(op.EQUAL),
@@ -720,7 +721,7 @@ const Precedence = enum {
     Equality, // == !=
     Comparison, // < > <= >=
     Term, // + -
-    Factor, // * /
+    Factor, // * / %
     Unary, // ! -
     Call, // . ()
     Primary,
@@ -823,6 +824,8 @@ const rules = [_]ParseRule{
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_EOF
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_MODULO
+    ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
 };
 
 const CompilationResult = struct {
