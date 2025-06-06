@@ -390,6 +390,7 @@ fn ifStatement() void {
     patchJump(elseJump);
 }
 fn forStatement() void {
+    beginScope();
     // > For loop initializer
     consume(TokenType.LeftParen, "Expect '(' after 'for'.");
     if (match(TokenType.Semicolon)) {
@@ -399,16 +400,38 @@ fn forStatement() void {
     } else {
         expressionStatement();
     }
-    consume(TokenType.Semicolon, "Expect ';' after for initializer.");
     // < For loop initializer
     // > For loop condition start
-    const loop_start = currentChunk().count;
-    consume(TokenType.Semicolon, "Expect ';' after for condition.");
+    var loop_start = currentChunk().count;
+    var exitJump: ?usize = null;
+    if (!match(TokenType.Semicolon)) {
+        expression();
+        consume(TokenType.Semicolon, "Expect ';' after loop condition.");
+        exitJump = emit.jump(op.JUMP_IF_FALSE);
+        emit.byte(op.POP);
+    }
     // < For loop condition end
-    consume(TokenType.RightParen, "Expect ')' after for clauses.");
-
+    // > For loop increment clause
+    if (!match(TokenType.RightParen)) {
+        const bodyJump = emit.jump(op.JUMP);
+        const incrementStart = currentChunk().count;
+        expression();
+        emit.byte(op.POP); // Pop the increment value
+        consume(TokenType.RightParen, "Expect ')' after for clauses.");
+        emitLoop(loop_start); // Jump back to the start of the loop
+        loop_start = incrementStart; // Update loop_start to the start of the increment clause
+        patchJump(bodyJump);
+    }
+    // < For loop increment clause
+    // > Loop body
     statement();
     emitLoop(loop_start);
+    if (exitJump) |exit_jump| {
+        patchJump(exit_jump);
+        emit.byte(op.POP);
+    }
+    endScope();
+    // < Loop body
 }
 /// Parse a statement: statements don't leave anything on the stack.
 /// statement      → exprStmt

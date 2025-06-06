@@ -23,7 +23,7 @@ Flags:
 | `-d`, `--debug`   | Enable debug output, set debug level  |
 
 ## Additional features in loxz over the standard implementation: 
-- Implemented `OP_CONSTANT_LONG` to enable 16_777_216 (u25) constants. This is automatically injected after we hit the 256 limit on constant pool and instruction switches from `OP_CONSTANT` to it's longer version.
+- Implemented `OP_CONSTANT_LONG` to enable 16_777_216 (u24) constants. This is automatically injected after we hit the 256 limit on constant pool and instruction switches from `OP_CONSTANT` to it's longer version.
 pool have been exhausted.
 - 65536 Global variables with Global cache to reduce hashtable lookups.
 - Expanded Local variables limit to 65536 (u16), no 256 local variable limit, this means we use (u16::max + 1024)*sizeof(Value) [16 bytes] for stack
