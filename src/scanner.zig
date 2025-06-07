@@ -102,8 +102,8 @@ fn identifierType(sc: *Scanner) TokenType {
             }
             switch (sc.source[sc.start + 1]) {
                 'a' => return sc.checkKeyword(2, 2, "se", TokenType.Case),
-                'o' => return sc.checkKeyword(2, 4, "ntinue", TokenType.Continue),
-                'l' => return sc.checkKeyword(2, 4, "ass", TokenType.Class),
+                // 'o' => return sc.checkKeyword(2, 6, "ntinue", TokenType.Continue),
+                'l' => return sc.checkKeyword(2, 3, "ass", TokenType.Class),
                 else => return TokenType.Identifier,
             }
         },
@@ -119,7 +119,7 @@ fn identifierType(sc: *Scanner) TokenType {
                 return TokenType.Identifier;
             }
             switch (sc.source[sc.start + 1]) {
-                'w' => return sc.checkKeyword(2, 3, "itch", TokenType.Switch),
+                'w' => return sc.checkKeyword(2, 4, "itch", TokenType.Switch),
                 'u' => return sc.checkKeyword(2, 3, "per", TokenType.Super),
                 else => return TokenType.Identifier,
             }
@@ -207,6 +207,7 @@ pub fn scanToken(sc: *Scanner) Token {
         '/' => return makeToken(sc, TokenType.Slash),
         '*' => return makeToken(sc, TokenType.Star),
         '%' => return makeToken(sc, TokenType.Modulo),
+        ':' => return makeToken(sc, TokenType.Colon),
         '!' => return if (sc.match('='))
             makeToken(sc, TokenType.BangEqual)
         else
@@ -319,4 +320,5 @@ pub const TokenType = enum(u8) {
     Switch,
     Case,
     Default,
+    Colon,
 };

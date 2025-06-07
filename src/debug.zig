@@ -50,6 +50,8 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .EQUAL => return simpleInstruction("OP_EQUAL", byte_offset, src_info),
         .PRINT => return simpleInstruction("OP_PRINT", byte_offset, src_info),
         .POP => return simpleInstruction("OP_POP", byte_offset, src_info),
+        .SWITCH_COMP => return simpleInstruction("OP_SWITCH_COMP", byte_offset, src_info),
+        .SWITCH_VAL => return simpleInstruction("OP_SWITCH_VAL", byte_offset, src_info),
         .DEFINE_GLOBAL => return constantU16Instruction("OP_DEFINE_GLOBAL", chunk, byte_offset, src_info),
         .GET_GLOBAL => return constantU16Instruction("OP_GET_GLOBAL", chunk, byte_offset, src_info),
         .SET_GLOBAL => return constantU16Instruction("OP_SET_GLOBAL", chunk, byte_offset, src_info),

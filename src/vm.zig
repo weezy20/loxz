@@ -1,4 +1,6 @@
 const STACK_MAX = (1 << 16) + 1024; // u16 max locals + 1024 for temporaries.
+const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
+
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
@@ -24,6 +26,12 @@ stringTable: Table,
 globals: Table,
 /// Cache for global variables
 globalCache: GlobalCache,
+/// Switch stack
+switchStack: std.BoundedArray(Value, MAX_SWITCH_DEPTH),
+
+inline fn switchDepth(self: *VM) usize {
+    return self.switchStack.len;
+}
 
 const GlobalCache = struct {
     const GlobalCacheEntry = struct {
@@ -77,6 +85,11 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .stringTable = Table.init(allocator),
         .globals = Table.init(allocator),
         .globalCache = GlobalCache.init(),
+        .switchStack = std.BoundedArray(Value, MAX_SWITCH_DEPTH).init(0) catch |err| {
+            // We fail silently here, as the switch-case is not a critical lox language feature but an extension.
+            std.debug.print("Error initializing switch stack: {any}\nSwitch-cases not avaialble", .{err});
+            std.process.exit(101);
+        },
     };
 }
 pub fn deinitVM(self: *VM) void {
@@ -399,6 +412,29 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const offset = self.readU16();
                 self.ip -= offset;
             },
+            .SWITCH_VAL => {
+                const depth = self.readByte();
+                if (depth >= MAX_SWITCH_DEPTH) {
+                    self.runtimeError("Switch value with invalid depth 0x{x:0>2} (max: {d})", .{ depth, MAX_SWITCH_DEPTH });
+                    return RuntimeError.SwitchDepthExceeded;
+                }
+                self.switchStack.set(depth, try self.pop()); // Pops the switch value and store in vm.switchStack
+            },
+            .SWITCH_COMP => {
+                if (self.switchDepth() == 0) {
+                    self.runtimeError("Switch comparison without a switch value, [invalid depth: 0x{x:0>2}]", .{self.readByte()});
+                    return RuntimeError.SwitchStackEmpty;
+                }
+                const depth = self.readByte();
+                if (depth >= MAX_SWITCH_DEPTH) {
+                    self.runtimeError("Switch value with invalid depth 0x{x:0>2} (max: {d})", .{ depth, MAX_SWITCH_DEPTH });
+                    return RuntimeError.SwitchDepthExceeded;
+                }
+                const switch_value: Value = self.switchStack.get(depth);
+                const case_value = try self.pop();
+                try self.push(Value{ .Bool = switch_value.isEqual(&case_value) });
+            },
+
             // else => {
             //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
             //     return RuntimeError.UnknownOpCode;

@@ -34,4 +34,6 @@ pub const OpCode = enum(u8) {
     JUMP,
     JUMP_IF_FALSE,
     LOOP,
+    SWITCH_VAL,
+    SWITCH_COMP,
 };
