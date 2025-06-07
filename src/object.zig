@@ -9,7 +9,7 @@ pub const Object = struct {
 
     const Data = union(enum) {
         String: *ObjString,
-        // Function: *Function,
+        Function: ObjFunction,
         // Class: *Class,
         // Instance: *Instance,
         // Array: *Array,
@@ -24,12 +24,53 @@ pub const Object = struct {
                         try writer.print("Object string: [\"{s}\"]", .{s.chars});
                     }
                 },
+                .Function => |f| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("Function: {s}", .{f.name.?});
+                    } else { // Debug mode: `{}`
+                        try writer.print("Object function: [name: {s}, arity: {}, chunk: {}]", .{
+                            f.name.?,
+                            f.arity,
+                            f.chunk,
+                        });
+                    }
+                },
             }
         }
     };
 
     pub fn format(self: *const Object, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         try self.data.format(fmt, options, writer);
+    }
+
+    pub fn newFunction(
+        vm: *VM,
+        name: *ObjString,
+        arity: u32,
+    ) !*Object {
+        const allocator = vm.allocator;
+        const obj_function = try ObjFunction.init(allocator);
+        errdefer obj_function.deinit(allocator);
+
+        obj_function.* = .{
+            .name = name.clone(),
+            .arity = arity,
+            .chunk = Chunk.init(&allocator),
+        };
+
+        // Create the Object wrapper
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Function = obj_function,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
     }
 
     pub fn newString(vm: *VM, strings: []const []const u8, intern_table: ?*Table) !struct {
@@ -111,20 +152,23 @@ pub const Object = struct {
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
-            // else => null,
+            else => null,
         };
     }
 
     pub fn asObjString(self: *const Object) ?*ObjString {
         return switch (self.data) {
             .String => |s| s,
-            // else => null,
+            else => null,
         };
     }
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
                 s.deinit(self.allocator);
+            },
+            .Function => |f| {
+                f.deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -187,6 +231,26 @@ pub const ObjString = struct {
         allocator.free(self.chars);
         allocator.destroy(self);
     }
+    /// Clone the string object. Cheap, just bumps the refcount.
+    pub fn clone(self: *ObjString) *ObjString {
+        self.refcount += 1; // Increment refcount
+        return self;
+    }
+};
+pub const ObjFunction = struct {
+    name: ?*ObjString = null,
+    arity: u32,
+    chunk: Chunk,
+
+    /// Create and return an undefined function object.
+    pub fn init(allocator: Allocator) !*ObjFunction {
+        return allocator.create(ObjFunction);
+    }
+    /// Deallocate the function object and its chunk
+    pub fn deinit(self: *ObjFunction, allocator: Allocator) void {
+        self.chunk.deinit(allocator);
+        allocator.destroy(self);
+    }
 };
 
 test "Object" {
@@ -200,3 +264,4 @@ const hasher = @import("common.zig").hasher;
 const Table = @import("table.zig").Table;
 const tableFindString = @import("table.zig").tableFindString;
 const VM = @import("vm.zig").VM;
+const Chunk = @import("chunk.zig").Chunk;
