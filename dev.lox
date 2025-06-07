@@ -1,0 +1,8 @@
+var a = 22;
+
+switch (a) {
+    case 1: print "not expected";
+    case 22:{ print "22 is the answer"; print "still in case 22";}
+    case 33: print "not expected";
+    default: print "default case";
+}

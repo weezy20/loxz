@@ -418,7 +418,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.runtimeError("Switch value with invalid depth 0x{x:0>2} (max: {d})", .{ depth, MAX_SWITCH_DEPTH });
                     return RuntimeError.SwitchDepthExceeded;
                 }
-                self.switchStack.set(depth, try self.pop()); // Pops the switch value and store in vm.switchStack
+                if (depth == self.switchStack.len) {
+                    self.switchStack.append(try self.pop()) catch {};
+                } else self.switchStack.set(depth, try self.pop()); // Pops the switch value and store in vm.switchStack
             },
             .SWITCH_COMP => {
                 if (self.switchDepth() == 0) {
