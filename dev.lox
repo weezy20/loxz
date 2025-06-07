@@ -3,9 +3,9 @@ var a = 223;
 switch (a) {
     case 1: print "not expected"; // Single-line statement doesn't need braces.
     // Use blocks for multi-line statements.
-    case 220 + 3: { 
-        print "22 is the answer";
-        print "still in case 22";
+    case 220 + 3: switch (4) {
+        case 4: print "nested switch"; // This will execute if the outer case matches.
+        default: print "nested default"; // This will execute if the inner switch doesn't match.
     }
     case 33: print "not expected"; // No `break` required, only one case will match and execute.
     default: print "default case"; // Default case will execute if no other case matches.
