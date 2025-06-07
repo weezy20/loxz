@@ -30,3 +30,4 @@ pool have been exhausted.
 - Expanded Local variables limit to 65536 (u16), no 256 local variable limit, this means we use (u16::max + 1024)*sizeof(Value) [16 bytes] for stack
 - String interning for strings are performed at comptime so zero cost runtime ObjString comparisons. They are only a pointer comparison. It's as fast as it gets.
 - Supports `%` modulo operation.
+- Add support for `switch/case`. Check out [switch-case.lox](programs/switch-case.lox) example. Supports upto 64 nested switch blocks. No `break` keyword required, only one switch case executes. 
