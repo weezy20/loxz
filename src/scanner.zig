@@ -96,14 +96,34 @@ fn checkKeyword(sc: *Scanner, start: usize, length: usize, rest: []const u8, key
 fn identifierType(sc: *Scanner) TokenType {
     switch (sc.source[sc.start]) {
         'a' => return sc.checkKeyword(1, 2, "nd", TokenType.And),
-        'c' => return sc.checkKeyword(1, 4, "lass", TokenType.Class),
+        'c' => {
+            if (sc.current - sc.start == 1) {
+                return TokenType.Identifier;
+            }
+            switch (sc.source[sc.start + 1]) {
+                'a' => return sc.checkKeyword(2, 2, "se", TokenType.Case),
+                // 'o' => return sc.checkKeyword(2, 6, "ntinue", TokenType.Continue),
+                'l' => return sc.checkKeyword(2, 3, "ass", TokenType.Class),
+                else => return TokenType.Identifier,
+            }
+        },
+        'd' => return sc.checkKeyword(1, 6, "efault", TokenType.Default),
         'e' => return sc.checkKeyword(1, 3, "lse", TokenType.Else),
         'i' => return sc.checkKeyword(1, 1, "f", TokenType.If),
         'n' => return sc.checkKeyword(1, 2, "il", TokenType.Nil),
         'o' => return sc.checkKeyword(1, 1, "r", TokenType.Or),
         'p' => return sc.checkKeyword(1, 4, "rint", TokenType.Print),
         'r' => return sc.checkKeyword(1, 5, "eturn", TokenType.Return),
-        's' => return sc.checkKeyword(1, 4, "uper", TokenType.Super),
+        's' => {
+            if (sc.current - sc.start == 1) {
+                return TokenType.Identifier;
+            }
+            switch (sc.source[sc.start + 1]) {
+                'w' => return sc.checkKeyword(2, 4, "itch", TokenType.Switch),
+                'u' => return sc.checkKeyword(2, 3, "per", TokenType.Super),
+                else => return TokenType.Identifier,
+            }
+        },
         'v' => return sc.checkKeyword(1, 2, "ar", TokenType.Var),
         'w' => return sc.checkKeyword(1, 4, "hile", TokenType.While),
         'f' => {
@@ -187,6 +207,7 @@ pub fn scanToken(sc: *Scanner) Token {
         '/' => return makeToken(sc, TokenType.Slash),
         '*' => return makeToken(sc, TokenType.Star),
         '%' => return makeToken(sc, TokenType.Modulo),
+        ':' => return makeToken(sc, TokenType.Colon),
         '!' => return if (sc.match('='))
             makeToken(sc, TokenType.BangEqual)
         else
@@ -296,4 +317,8 @@ pub const TokenType = enum(u8) {
 
     // Extensions
     Modulo, // '%'
+    Switch,
+    Case,
+    Default,
+    Colon,
 };

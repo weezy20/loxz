@@ -100,7 +100,7 @@ fn emitConstant(value: Value) !void {
         spanInfo(),
     );
 }
-fn emitU16Op(b: op, arg: usize) CompilerError!void {
+fn emitU16Op(b: OpCode, arg: usize) CompilerError!void {
     try emitByte(@intFromEnum(b));
     if (arg > std.math.maxInt(u16)) {
         // Safe: we know that arg is <= 65535
@@ -113,19 +113,22 @@ fn emitU16Op(b: op, arg: usize) CompilerError!void {
 }
 const emit = struct {
     const Self = @This();
-    fn byte(b: op) void {
+    fn op(b: OpCode) void {
         emitByte(@intFromEnum(b)) catch @panic(BYTECODE_FAIL);
     }
-    fn ops(opcodes: []const op) void {
+    fn ops(opcodes: []const OpCode) void {
         for (opcodes) |o| emitByte(@intFromEnum(o)) catch @panic(BYTECODE_FAIL);
     }
     /// Emit a jump instruction.
     /// Returns the offset of the jump placeholder operand in the current chunk.
     /// Use `patchJump` to fill in the jump offset later.
-    fn jump(b: op) usize {
+    fn jump(b: OpCode) usize {
         emitU16Op(b, 0xffff) catch @panic(BYTECODE_FAIL);
         // ^^^ equivalent to `emitByte(b)` followed by `emitByte(0xff)` twice
         return currentChunk().count - 2;
+    }
+    fn byte(b: u8) void {
+        emitByte(b) catch @panic(BYTECODE_FAIL);
     }
 };
 
@@ -155,9 +158,9 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
     if (cc.resolveLocal(&name)) |arg| {
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitU16Op(op.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         } else {
-            emitU16Op(op.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
         }
     } else |_| {
         // switch (err) {
@@ -172,9 +175,9 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
         const uarg = identifierConstant(&name, intern_table);
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitU16Op(op.SET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.SET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
         } else {
-            emitU16Op(op.GET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.GET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
         }
         return;
     }
@@ -198,9 +201,9 @@ fn string() void {
 /// Emit a literal from "previous"
 fn literal() void {
     switch (parser.previous.tokenType) {
-        .True => emitByte(@intFromEnum(op.TRUE)) catch @panic(BYTECODE_FAIL),
-        .False => emitByte(@intFromEnum(op.FALSE)) catch @panic(BYTECODE_FAIL),
-        .Nil => emitByte(@intFromEnum(op.NIL)) catch @panic(BYTECODE_FAIL),
+        .True => emit.op(OpCode.TRUE),
+        .False => emit.op(OpCode.FALSE),
+        .Nil => emit.op(OpCode.NIL),
         else => return,
     }
 }
@@ -223,18 +226,18 @@ fn binary() void {
 
     switch (operator_tt) {
         // Arithemtic infix expressions
-        .Plus => emit.byte(op.ADD),
-        .Minus => emit.byte(op.SUBTRACT),
-        .Star => emit.byte(op.MULTIPLY),
-        .Slash => emit.byte(op.DIVIDE),
-        .Modulo => emit.byte(op.MOD),
+        .Plus => emit.op(OpCode.ADD),
+        .Minus => emit.op(OpCode.SUBTRACT),
+        .Star => emit.op(OpCode.MULTIPLY),
+        .Slash => emit.op(OpCode.DIVIDE),
+        .Modulo => emit.op(OpCode.MOD),
         // Logical infix expression
-        .BangEqual => emit.ops(&.{ op.EQUAL, op.NOT }),
-        .EqualEqual => emit.byte(op.EQUAL),
-        .Greater => emit.byte(op.GREATER),
-        .GreaterEqual => emit.ops(&.{ op.LESS, op.NOT }),
-        .Less => emit.byte(op.LESS),
-        .LessEqual => emit.ops(&.{ op.GREATER, op.NOT }),
+        .BangEqual => emit.ops(&.{ OpCode.EQUAL, OpCode.NOT }),
+        .EqualEqual => emit.op(OpCode.EQUAL),
+        .Greater => emit.op(OpCode.GREATER),
+        .GreaterEqual => emit.ops(&.{ OpCode.LESS, OpCode.NOT }),
+        .Less => emit.op(OpCode.LESS),
+        .LessEqual => emit.ops(&.{ OpCode.GREATER, OpCode.NOT }),
         else => return, // Unreachable
     }
 }
@@ -250,25 +253,25 @@ fn unary() void {
     // Compile the operand
     parsePrecedence(Precedence.Unary);
     switch (operatorType) {
-        TokenType.Minus => emitByte(@intFromEnum(op.NEGATE)) catch @panic(BYTECODE_FAIL),
-        TokenType.Bang => emitByte(@intFromEnum(op.NOT)) catch @panic(BYTECODE_FAIL),
+        TokenType.Minus => emitByte(@intFromEnum(OpCode.NEGATE)) catch @panic(BYTECODE_FAIL),
+        TokenType.Bang => emitByte(@intFromEnum(OpCode.NOT)) catch @panic(BYTECODE_FAIL),
         else => return,
     }
 }
 /// Logical `and` operator
 fn logical_and() void {
-    const end_jump = emit.jump(op.JUMP_IF_FALSE); // Skip the right operand
-    emit.byte(op.POP); // Pop the left operand
+    const end_jump = emit.jump(OpCode.JUMP_IF_FALSE); // Skip the right operand
+    emit.op(OpCode.POP); // Pop the left operand
     parsePrecedence(Precedence.And); // Parse the right operand
     patchJump(end_jump); // Patch the jump to skip the right operand if the left operand is truthy
 }
 /// Logical `or` operator
 fn logical_or() void {
-    const elseJump = emit.jump(op.JUMP_IF_FALSE);
-    const endJump = emit.jump(op.JUMP); // if left is truthy, we jump to the end
+    const elseJump = emit.jump(OpCode.JUMP_IF_FALSE);
+    const endJump = emit.jump(OpCode.JUMP); // if left is truthy, we jump to the end
 
     patchJump(elseJump); // If left is falsey, we jump to the right operand
-    emit.byte(op.POP);
+    emit.op(OpCode.POP);
     parsePrecedence(Precedence.Or);
     patchJump(endJump); // if left was true, we jump and land here i.e. after the right operand
     // True i.e. left operand is left on the stack here.. if op.JUMP was executed, otherwise it's the value of the right operand
@@ -297,6 +300,7 @@ fn parsePrecedence(precedence: Precedence) void {
         Error("Invalid assignment target.");
     }
 }
+/// Check if the current tokenType matches the function param
 fn check(tokenType: TokenType) bool {
     return parser.current.tokenType == tokenType;
 }
@@ -309,12 +313,12 @@ fn match(tokenType: TokenType) bool {
 fn printStatement() void {
     expression();
     consume(TokenType.Semicolon, "Expect ';' after value.");
-    emitByte(@intFromEnum(op.PRINT)) catch @panic(BYTECODE_FAIL);
+    emitByte(@intFromEnum(OpCode.PRINT)) catch @panic(BYTECODE_FAIL);
 }
 fn expressionStatement() void {
     expression();
     consume(TokenType.Semicolon, "Expect ';' after expression.");
-    emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
+    emitByte(@intFromEnum(OpCode.POP)) catch @panic(BYTECODE_FAIL);
 }
 fn beginScope() void {
     // Practically Safe: scopeDepth is i32
@@ -333,7 +337,7 @@ fn endScope() void {
     // Pop all locals in the current scope
     while (cc.localCount() > 0 and cc.locals.items[cc.localCount() - 1].depth > cc.scopeDepth) {
         _ = cc.locals.pop();
-        emitByte(@intFromEnum(op.POP)) catch @panic(BYTECODE_FAIL);
+        emitByte(@intFromEnum(OpCode.POP)) catch @panic(BYTECODE_FAIL);
     }
 }
 /// `offset` is the jump placeholder to be patched.
@@ -353,7 +357,7 @@ fn patchJump(placeholder_addr: usize) void {
     currentChunk().code[placeholder_addr + 1] = @intCast(jumpOffset & 0xff); // LSB
 }
 fn emitLoop(loop_start: usize) void {
-    emit.byte(op.LOOP);
+    emit.op(OpCode.LOOP);
     const offset = currentChunk().count - loop_start + 2; // +2 for the LOOP 2-byte operand which also needs to be jumped over.
     if (offset > std.math.maxInt(u16)) {
         Error("Loop body too large.");
@@ -361,32 +365,80 @@ fn emitLoop(loop_start: usize) void {
     }
     emitBytes(&[_]u8{ @truncate((offset >> 8) & 0xff), @truncate(offset & 0xff) }) catch @panic(BYTECODE_FAIL);
 }
+fn switchStatement() void {
+    consume(TokenType.LeftParen, "Expect '(' after 'switch'.");
+    expression();
+    const currentSwitchDepth = cc.switchDepth;
+    emit.op(OpCode.SWITCH_VAL);
+    emit.byte(currentSwitchDepth);
+    cc.switchDepth += 1;
+    consume(TokenType.RightParen, "Expect ')' after switch expression.");
+    consume(TokenType.LeftBrace, "Expect opening block '{' after switch expression.");
+    // To track the end of switch-case for each case; each will be patched after the entire switch statement is compiled.
+    var endJumps = std.ArrayList(usize).init(parser.allocator);
+    defer endJumps.deinit();
+
+    var seenDefault: bool = false;
+
+    while (!check(TokenType.RightBrace) and !check(TokenType.Eof)) {
+        if (match(TokenType.Case)) {
+            // Eval the case expression
+            expression();
+            consume(TokenType.Colon, "Expect ':' after 'case'.");
+            emit.op(OpCode.SWITCH_COMP);
+            emit.byte(currentSwitchDepth);
+            const jump_to_next_case = emit.jump(OpCode.JUMP_IF_FALSE);
+            emit.op(OpCode.POP); // Pop the switch comparison result from the stack
+            statement();
+            endJumps.append(emit.jump(OpCode.JUMP)) catch @panic("Out of memory: Processing case for switch statement");
+            patchJump(jump_to_next_case);
+        } else if (match(TokenType.Default)) {
+            if (seenDefault) {
+                ErrorAtCurrent("Switch statement can only have one default case.");
+                return;
+            }
+            seenDefault = !seenDefault;
+            consume(TokenType.Colon, "Expect ':' after 'default'.");
+            statement();
+        } else {
+            ErrorAtCurrent("Switch/Case can only have 'case' or 'default' statements.");
+            advance();
+        }
+    }
+    // Patch end jumps for each case
+    for (endJumps.items) |jump| {
+        patchJump(jump);
+        emit.op(OpCode.POP); // Pop the switch comparison result from the stack
+    }
+    consume(TokenType.RightBrace, "Expect '}' after switch cases.");
+    cc.switchDepth -= 1;
+}
 fn whileStatement() void {
     const loop_start = currentChunk().count;
     consume(TokenType.LeftParen, "Expect '(' after 'while'.");
     expression(); // while condition
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
-    const exitJump = emit.jump(op.JUMP_IF_FALSE);
-    emit.byte(op.POP); // Pop while-condition from stack, put on stack on every iteration
+    const exitJump = emit.jump(OpCode.JUMP_IF_FALSE);
+    emit.op(OpCode.POP); // Pop while-condition from stack, put on stack on every iteration
     statement();
     emitLoop(loop_start);
     patchJump(exitJump);
-    emit.byte(op.POP); // Pop while-condition from stack when the loop exists due to condition being falsey
+    emit.op(OpCode.POP); // Pop while-condition from stack when the loop exists due to condition being falsey
 }
 fn ifStatement() void {
     consume(TokenType.LeftParen, "Expect '(' after 'if'.");
     expression(); // if condition
     consume(TokenType.RightParen, "Expect ')' after condition.");
 
-    const thenJump = emit.jump(op.JUMP_IF_FALSE);
-    emit.byte(op.POP); // Pop the condition value if condition was true
+    const thenJump = emit.jump(OpCode.JUMP_IF_FALSE);
+    emit.op(OpCode.POP); // Pop the condition value if condition was true
     statement(); // then block
 
-    const elseJump = emit.jump(op.JUMP); // jump over else block
+    const elseJump = emit.jump(OpCode.JUMP); // jump over else block
     patchJump(thenJump); // if true, we resume after the else jump instruction but before the else block
 
-    emit.byte(op.POP); // Pop the condition value, if condition was falsey
+    emit.op(OpCode.POP); // Pop the condition value, if condition was falsey
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
@@ -408,16 +460,16 @@ fn forStatement() void {
     if (!match(TokenType.Semicolon)) {
         expression();
         consume(TokenType.Semicolon, "Expect ';' after loop condition.");
-        exitJump = emit.jump(op.JUMP_IF_FALSE);
-        emit.byte(op.POP);
+        exitJump = emit.jump(OpCode.JUMP_IF_FALSE);
+        emit.op(OpCode.POP);
     }
     // < For loop condition end
     // > For loop increment clause
     if (!match(TokenType.RightParen)) {
-        const bodyJump = emit.jump(op.JUMP); // Jump to the loop body without executing the increment clause
+        const bodyJump = emit.jump(OpCode.JUMP); // Jump to the loop body without executing the increment clause
         const incrementStart = currentChunk().count;
         expression();
-        emit.byte(op.POP); // Pop the increment value
+        emit.op(OpCode.POP); // Pop the increment value
         consume(TokenType.RightParen, "Expect ')' after for clauses.");
         emitLoop(loop_start); // Jump back to the start of the loop
         loop_start = incrementStart; // Update loop_start to the start of the increment clause
@@ -430,7 +482,7 @@ fn forStatement() void {
     emitLoop(loop_start);
     if (exitJump) |exit_jump| {
         patchJump(exit_jump);
-        emit.byte(op.POP);
+        emit.op(OpCode.POP);
     }
     endScope();
 }
@@ -453,6 +505,10 @@ fn statement() void {
         TokenType.If => {
             advance();
             ifStatement();
+        },
+        TokenType.Switch => {
+            advance();
+            switchStatement();
         },
         TokenType.While => {
             advance();
@@ -561,7 +617,7 @@ fn defineVariable(global: usize) void {
         markInitialized();
         return;
     }
-    emitU16Op(op.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
+    emitU16Op(OpCode.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
@@ -693,12 +749,12 @@ inline fn endCompiler(allocator: std.mem.Allocator) !void {
     try emitReturn();
 }
 inline fn emitReturn() !void {
-    try emitByte(@intFromEnum(op.RETURN));
+    try emitByte(@intFromEnum(OpCode.RETURN));
 }
 
 const std = @import("std");
 const Chunk = @import("chunk.zig").Chunk;
-const op = @import("opcode.zig").OpCode;
+const OpCode = @import("opcode.zig").OpCode;
 const Token = @import("scanner.zig").Token;
 const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
@@ -826,6 +882,14 @@ const rules = [_]ParseRule{
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_MODULO
     ParseRule{ .prefix = null, .infix = binary, .precedence = Precedence.Factor },
+    // TOKEN_SWITCH
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_CASE
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_DEFAULT
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
+    // TOKEN_COLON
+    ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
 };
 
 const CompilationResult = struct {
@@ -845,6 +909,8 @@ pub const Compiler = struct {
     stringTable: Table,
     /// Current chunk being compiled
     compilingChunk: *Chunk,
+    /// Switch depth
+    switchDepth: u8 = 0,
 
     // Use same hash across table/objstring,
     // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values

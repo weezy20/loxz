@@ -31,6 +31,8 @@ pub const RuntimeError = error{
     InvalidComparison,
     CannotAddDifferentTypes,
     GlobalNotFound,
+    SwitchDepthExceeded,
+    SwitchStackEmpty,
 };
 pub fn formatRuntimeError(err: RuntimeError) []const u8 {
     return switch (err) {
@@ -45,5 +47,7 @@ pub fn formatRuntimeError(err: RuntimeError) []const u8 {
         RuntimeError.InvalidComparison => "Invalid operands for comparison",
         RuntimeError.CannotAddDifferentTypes => "Operands of different types cannot be added",
         RuntimeError.GlobalNotFound => "Undefined global variable",
+        RuntimeError.SwitchDepthExceeded => "Nested switch depth maximum exceeded",
+        RuntimeError.SwitchStackEmpty => "Switch stack is empty",
     };
 }
