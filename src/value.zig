@@ -22,6 +22,15 @@ pub const Value = union(enum) {
             .Obj => try writer.print("{s}", .{self.Obj}),
         }
     }
+    /// Check if the value is a function object and return it if so.
+    pub fn asFunction(value: *const Value) ?*Object {
+        if (value.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Function) {
+                return obj;
+            }
+        }
+        return null;
+    }
     pub fn asNumber(value: *const Value) ?f64 {
         return switch (value.*) {
             .Number => |num| num,
@@ -90,12 +99,14 @@ pub const Value = union(enum) {
             else => return false,
         }
     }
+    /// Check if the value is an object and return it if so.
     pub fn isObject(self: *const Value) ?*Object {
         if (self.* == .Obj) {
             return self.Obj;
         }
         return null;
     }
+    /// Check if the value is an object and return it if it is a string object.
     pub fn asObjString(self: *const Value) ?*ObjString {
         if (self.isObject()) |obj| {
             if (std.meta.activeTag(obj.data) == .String) {

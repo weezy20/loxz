@@ -9,7 +9,7 @@ pub const Object = struct {
 
     const Data = union(enum) {
         String: *ObjString,
-        Function: ObjFunction,
+        Function: *ObjFunction,
         // Class: *Class,
         // Instance: *Instance,
         // Array: *Array,
@@ -21,14 +21,14 @@ pub const Object = struct {
                     if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
                         try writer.writeAll(s.chars);
                     } else { // Debug mode: `{}`
-                        try writer.print("Object string: [\"{s}\"]", .{s.chars});
+                        try writer.print("<ObjString: [\"{s}\"]>", .{s.chars});
                     }
                 },
                 .Function => |f| {
                     if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
-                        try writer.print("Function: {s}", .{f.name.?});
+                        try writer.print("<fn: {s}>", .{f.name.?});
                     } else { // Debug mode: `{}`
-                        try writer.print("Object function: [name: {s}, arity: {}, chunk: {}]", .{
+                        try writer.print("<ObjFunction: [name: {s}, arity: {}, chunk: {}]>", .{
                             f.name.?,
                             f.arity,
                             f.chunk,
@@ -45,16 +45,16 @@ pub const Object = struct {
 
     pub fn newFunction(
         vm: *VM,
-        name: *ObjString,
-        arity: u32,
+        name: ?*ObjString,
+        arity: ?u32,
     ) !*Object {
         const allocator = vm.allocator;
         const obj_function = try ObjFunction.init(allocator);
         errdefer obj_function.deinit(allocator);
 
         obj_function.* = .{
-            .name = name.clone(),
-            .arity = arity,
+            .name = if (name) |n| n.clone() else null,
+            .arity = arity orelse 0,
             .chunk = Chunk.init(&allocator),
         };
 
@@ -249,6 +249,7 @@ pub const ObjFunction = struct {
     /// Deallocate the function object and its chunk
     pub fn deinit(self: *ObjFunction, allocator: Allocator) void {
         self.chunk.deinit(allocator);
+        if (self.name) |n| n.deinit(allocator);
         allocator.destroy(self);
     }
 };
