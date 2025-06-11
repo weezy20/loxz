@@ -1,5 +1,5 @@
 var debug_level: u8 = 0;
-// Current compiler global
+/// Compiler global singleton
 var cc: *Compiler = undefined;
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
@@ -20,8 +20,8 @@ var parser: Parser = Parser{
     .vm = undefined,
     .canAssign = null,
 };
-var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
+
 const Parser = struct {
     previous: Token,
     current: Token,
@@ -659,7 +659,7 @@ fn makeConstant(value: Value) usize {
     return currentChunk().writeU16Constant(value) catch @panic("developer: propagate this error up");
 }
 inline fn currentChunk() *Chunk {
-    return cc.compilingChunk;
+    return &cc.function.chunk;
 }
 /// Report error at current token
 fn ErrorAtCurrent(msg: ?[]const u8) void {
@@ -900,6 +900,8 @@ const CompilationResult = struct {
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
 pub const Compiler = struct {
+    function: *ObjFunction,
+    type: FunctionType,
     locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
     scopeDepth: i32, // Same as clox
@@ -907,8 +909,6 @@ pub const Compiler = struct {
     constantTable: Table,
     /// Compiler string table
     stringTable: Table,
-    /// Current chunk being compiled
-    compilingChunk: *Chunk,
     /// Switch depth
     switchDepth: u8 = 0,
 
@@ -917,13 +917,14 @@ pub const Compiler = struct {
     // but should be cleared up in the future. For now we just stick to the defaults...
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
-    pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
+    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
         return .{
             .locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
             .scopeDepth = 0,
             .stringTable = Table.init(allocator),
             .constantTable = Table.initWithHashFn(allocator, .default),
-            .compilingChunk = chunk,
+            .function = try lib.newFunction(vm, null, null),
+            .type = @"type",
         };
     }
     pub fn deinit(self: *@This()) void {
@@ -961,3 +962,10 @@ pub const Local = struct {
     name: Token,
     depth: i32,
 };
+
+const FunctionType = enum {
+    Function,
+    Script,
+};
+
+const ObjFunction = @import("object.zig").ObjFunction;

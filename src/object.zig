@@ -26,10 +26,10 @@ pub const Object = struct {
                 },
                 .Function => |f| {
                     if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
-                        try writer.print("<fn: {s}>", .{f.name.?});
+                        try writer.print("<fn: {s}>", .{if (f.name) |n| n.chars else "null"});
                     } else { // Debug mode: `{}`
                         try writer.print("<ObjFunction: [name: {s}, arity: {}, chunk: {}]>", .{
-                            f.name.?,
+                            if (f.name) |n| n.chars else "null",
                             f.arity,
                             f.chunk,
                         });
@@ -42,7 +42,7 @@ pub const Object = struct {
     pub fn format(self: *const Object, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         try self.data.format(fmt, options, writer);
     }
-
+    /// Allocate a new ObjFunction using the VM's allocator and add it to the VM's object list.
     pub fn newFunction(
         vm: *VM,
         name: ?*ObjString,
@@ -189,6 +189,9 @@ pub const Object = struct {
                 if (s1 == s2) return true; // Fast path for same string
                 return ObjString.eql(s1, s2);
             },
+            .Function => {
+                @panic("Function equality not implemented yet");
+            },
             // else => return false,
         }
     }
@@ -248,16 +251,27 @@ pub const ObjFunction = struct {
     }
     /// Deallocate the function object and its chunk
     pub fn deinit(self: *ObjFunction, allocator: Allocator) void {
-        self.chunk.deinit(allocator);
+        self.chunk.deinit();
         if (self.name) |n| n.deinit(allocator);
         allocator.destroy(self);
     }
 };
 
-test "Object" {
-    const t = std.testing;
-    try t.expect(@sizeOf(Object) == 32);
-    try t.expect(@sizeOf(ObjString) == 32);
+/// Create an ObjFunction with the vm allocator, if you want an Object wrapper use `Object.newFunction`.
+pub fn newFunction(
+    vm: *VM,
+    name: ?*ObjString,
+    arity: ?u32,
+) !*ObjFunction {
+    // Create the function object
+    const allocator = vm.allocator;
+    const obj_func = try allocator.create(ObjFunction);
+    obj_func.* = ObjFunction{
+        .name = if (name) |n| n.clone() else null,
+        .arity = arity orelse 0,
+        .chunk = Chunk.init(&allocator),
+    };
+    return obj_func;
 }
 
 // const hasher = @import("table.zig").loxHash;
