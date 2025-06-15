@@ -734,19 +734,23 @@ pub fn compile(
     while (!match(TokenType.Eof)) {
         declaration();
     }
+    const function = endCompiler(allocator) catch |err| b: {
+        std.debug.print("[Compiler Error]: {s}\n", .{@errorName(err)});
+        break :b null;
+    };
     const retval: CompilationResult = .{
+        .function = function,
         .success = !parser.had_error,
         .debugInfo = parser.debugInfo,
-    };
-    endCompiler(allocator) catch |err| {
-        std.debug.print("[Compiler]: Failed to emit OP_RETURN: {s}\n", .{@errorName(err)});
     };
     return retval;
 }
 /// `allocator` is only used in debug mode
-inline fn endCompiler(allocator: std.mem.Allocator) !void {
-    if (debug_level > 0) currentChunk().disassemble(allocator, "code", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+inline fn endCompiler(allocator: std.mem.Allocator) !*ObjFunction {
+    if (debug_level > 0 and !parser.had_error)
+        currentChunk().disassemble(allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
     try emitReturn();
+    return cc.function;
 }
 inline fn emitReturn() !void {
     try emitByte(@intFromEnum(OpCode.RETURN));
@@ -895,6 +899,7 @@ const rules = [_]ParseRule{
 const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
+    function: ?*ObjFunction,
 };
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
@@ -918,8 +923,16 @@ pub const Compiler = struct {
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
     pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
+        var locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array");
+        // Claim slot 0 for vm usage
+        try locals.append(Local{ .depth = 0, .name = Token{
+            .tokenType = TokenType.Error,
+            .lexeme = "",
+            .error_msg = "VM Reserved Token",
+            .line = 0,
+        } });
         return .{
-            .locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
+            .locals = locals,
             .scopeDepth = 0,
             .stringTable = Table.init(allocator),
             .constantTable = Table.initWithHashFn(allocator, .default),

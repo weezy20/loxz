@@ -26,10 +26,13 @@ pub const Object = struct {
                 },
                 .Function => |f| {
                     if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
-                        try writer.print("<fn: {s}>", .{if (f.name) |n| n.chars else "null"});
+                        if (f.name) |n|
+                            try writer.print("<fn: {s}>", .{n.chars})
+                        else
+                            try writer.print("<script>", .{});
                     } else { // Debug mode: `{}`
                         try writer.print("<ObjFunction: [name: {s}, arity: {}, chunk: {}]>", .{
-                            if (f.name) |n| n.chars else "null",
+                            if (f.name) |n| n.chars else "<script>",
                             f.arity,
                             f.chunk,
                         });
