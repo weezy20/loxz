@@ -249,7 +249,7 @@ pub const ObjFunction = struct {
     chunk: Chunk,
 
     /// Create and return an undefined function object.
-    pub fn init(allocator: Allocator) !*ObjFunction {
+    pub inline fn init(allocator: Allocator) !*ObjFunction {
         return allocator.create(ObjFunction);
     }
     /// Deallocate the function object and its chunk
