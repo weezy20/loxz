@@ -29,6 +29,13 @@ globalCache: GlobalCache,
 /// Switch stack
 switchStack: std.BoundedArray(Value, MAX_SWITCH_DEPTH),
 
+/// An ongoing function call.
+const CallFrame = struct {
+    function: *ObjFunction,
+    ip: [*]u8,
+    slots: [*]Value,
+};
+
 inline fn switchDepth(self: *VM) usize {
     return self.switchStack.len;
 }
@@ -494,6 +501,7 @@ const InterpretResult = lib.InterpretResult;
 const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
 const ObjString = lib.ObjString;
+const ObjFunction = lib.ObjFunction;
 const Table = lib.Table;
 
 fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
