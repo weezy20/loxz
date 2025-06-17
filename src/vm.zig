@@ -233,23 +233,23 @@ inline fn currentFrame(self: *VM) *CallFrame {
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
     var frame = self.currentFrame();
-    var debug_offset: usize = 0;
+    var debug_offset: usize = frame.ip - frame.function.chunk.code;
     var global_count: usize = 0;
     var string_count: usize = 0;
-    while (debug_offset < self.chunk.count) {
+    while (debug_offset < frame.function.chunk.count) {
         if (stack_tracing) self.printStack();
         if (global_debug_level > 0) {
             if (self.debugInfo) |d| blk: {
-                if (debug_offset >= self.chunk.count) break :blk;
+                if (debug_offset >= frame.function.chunk.count) break :blk;
                 debug_offset = lib.disassembleInstruction(
-                    self.chunk,
+                    &frame.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = d, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             } else {
                 debug_offset = lib.disassembleInstruction(
-                    self.chunk,
+                    &frame.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = null, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
@@ -269,7 +269,11 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
             .RETURN => {
-                // const val = try self.pop();
+                // const ret_val = try self.pop();
+                // self.frameCount -= 1;
+                // if (self.frameCount == 0) {
+                //     return;
+                // }
                 // std.debug.print("{s}\n", .{val});
                 return;
             },
@@ -419,17 +423,17 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .JUMP => {
                 const offset = self.readU16();
-                self.ip += offset;
+                frame.ip += offset;
             },
             .JUMP_IF_FALSE => {
                 const offset = self.readU16();
                 if (self.peek(0).isFalsey()) {
-                    self.ip += offset;
+                    frame.ip += offset;
                 }
             },
             .LOOP => {
                 const offset = self.readU16();
-                self.ip -= offset;
+                frame.ip -= offset;
             },
             .SWITCH_VAL => {
                 const depth = self.readByte();
