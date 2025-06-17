@@ -1,4 +1,4 @@
-const FRAMES_MAX = 64;
+const FRAMES_MAX = 64; // Note, frameCount is u8 so this must be within u8 bounds
 const STACK_MAX = FRAMES_MAX * ((1 << 16) + 1024); // u16 max locals + 1024 for temporaries.
 const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
 
@@ -26,7 +26,7 @@ globalCache: GlobalCache,
 /// Switch stack
 switchStack: std.BoundedArray(Value, MAX_SWITCH_DEPTH),
 /// Callframe stack
-frames: [FRAMES_MAX]CallFrame,
+frames: *[FRAMES_MAX]CallFrame,
 frameCount: u8, // Ok because frames_max is 64
 
 /// An ongoing function call.
@@ -88,8 +88,6 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         std.process.exit(101);
     };
     return VM{
-        .chunk = undefined,
-        .ip = undefined,
         .allocator = allocator,
         .stack = stackInit,
         .stackTop = stackInit,
