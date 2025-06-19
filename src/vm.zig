@@ -1,4 +1,5 @@
-const STACK_MAX = (1 << 16) + 1024; // u16 max locals + 1024 for temporaries.
+const FRAMES_MAX = 64;
+const STACK_MAX = FRAMES_MAX * ((1 << 16) + 1024); // u16 max locals + 1024 for temporaries.
 const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
 
 pub const VM = @This();
@@ -6,10 +7,6 @@ pub const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
 
 var global_debug_level: u8 = 0;
-/// Chunk to execute
-chunk: *Chunk,
-/// Bytecode instruction pointer
-ip: [*]u8,
 /// Optional debug info to print during execution
 debugInfo: ?*DebugInfo = null,
 /// Allocator for the VM
@@ -28,6 +25,9 @@ globals: Table,
 globalCache: GlobalCache,
 /// Switch stack
 switchStack: std.BoundedArray(Value, MAX_SWITCH_DEPTH),
+/// Callframe stack
+frames: [FRAMES_MAX]CallFrame,
+frameCount: usize,
 
 /// An ongoing function call.
 const CallFrame = struct {
@@ -80,7 +80,11 @@ const GlobalCache = struct {
 
 pub fn initVM(allocator: std.mem.Allocator) VM {
     const stackInit = allocator.create([STACK_MAX]Value) catch |err| {
-        std.debug.print("Error allocating stack: {s}\n", .{@errorName(err)});
+        std.debug.print("Error allocating value stack: {s}\n", .{@errorName(err)});
+        std.process.exit(101);
+    };
+    const framesInit = allocator.create([FRAMES_MAX]CallFrame) catch |err| {
+        std.debug.print("Error allocating callframe stack: {s}\n", .{@errorName(err)});
         std.process.exit(101);
     };
     return VM{
@@ -97,6 +101,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
             std.debug.print("Error initializing switch stack: {any}\nSwitch-cases not avaialble", .{err});
             std.process.exit(101);
         },
+        .frames = framesInit,
     };
 }
 pub fn deinitVM(self: *VM) void {
@@ -107,6 +112,7 @@ pub fn deinitVM(self: *VM) void {
     self.globals.deinit();
     self.freeObjects();
     self.allocator.destroy(self.stack);
+    self.allocator.destroy(self.frames);
 }
 inline fn stackSize(self: *VM) usize {
     return @divExact((@intFromPtr(self.stackTop) - @intFromPtr(self.stack)), @sizeOf(Value));
