@@ -176,18 +176,23 @@ fn pop(self: *VM) RuntimeError!Value {
     return self.stackTop[0];
 }
 
-pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
-    stack_tracing: bool = false,
-    debug_level: u8,
-    debugInfo: ?*DebugInfo = null,
-    init_string_table: ?*Table,
-}) InterpretResult {
+pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) InterpretResult {
     global_debug_level = opts.debug_level;
-    self.currentChunk() = chunk; // TODO: Fix
-    if (global_debug_level >= 2) {
-        chunk.print("Loaded chunk on VM");
+    const compiler = lib.Compiler.init(self.allocator, self, .Script) catch |err| {
+        std.debug.print("Compiler init error : {s}", @errorName(err));
+        return .compile_error;
+    };
+    const compile_result = lib.compile(compiler, source, self, self.allocator, opts.intoCompilerOpts());
+    if (!compile_result.success) {
+        return .compile_error;
     }
-    self.ip = chunk.code;
+    const function = compile_result.function;
+    self.frames[self.frameCount] = CallFrame{
+        .function = function,
+        .ip = function.chunk.code,
+        .slots = self.stackTop, // Start with the current stack top
+    };
+    self.frameCount += 1;
     if (opts.init_string_table) |t| {
         lib.tableAddAll(@constCast(t), &self.stringTable) catch |err| {
             std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});

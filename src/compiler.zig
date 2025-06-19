@@ -707,11 +707,7 @@ pub fn compile(
     source: []const u8,
     vm: *VM,
     allocator: std.mem.Allocator,
-    opts: struct {
-        debug: bool,
-        debug_level: ?u8,
-        repl_mode: bool,
-    },
+    opts: lib.CompilerOpts,
 ) CompilationResult {
     cc = compiler; // Set the global compiler instance
     parser.allocator = allocator;
