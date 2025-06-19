@@ -27,7 +27,7 @@ globalCache: GlobalCache,
 switchStack: std.BoundedArray(Value, MAX_SWITCH_DEPTH),
 /// Callframe stack
 frames: [FRAMES_MAX]CallFrame,
-frameCount: usize,
+frameCount: u8, // Ok because frames_max is 64
 
 /// An ongoing function call.
 const CallFrame = struct {
@@ -102,6 +102,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
             std.process.exit(101);
         },
         .frames = framesInit,
+        .frameCount = 0,
     };
 }
 pub fn deinitVM(self: *VM) void {
@@ -206,14 +207,16 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
 }
 
 inline fn readByte(self: *VM) u8 {
-    const byte = self.ip[0];
-    self.ip += 1;
+    var frame = self.currentFrame();
+    const byte = frame.ip[0];
+    frame.ip += 1;
     return byte;
 }
 /// Interpret u16 as big-endian, return as usize
 inline fn readU16(self: *VM) usize {
-    const bytes: [2]u8 = .{ self.ip[0], self.ip[1] };
-    self.ip += 2;
+    var frame = self.currentFrame();
+    const bytes: [2]u8 = .{ frame.ip[0], frame.ip[1] };
+    frame.ip += 2;
     return @as(usize, std.mem.readInt(u16, bytes[0..], .big));
 }
 inline fn readConstant(self: *VM, long: bool) usize {
@@ -226,7 +229,12 @@ inline fn readConstant(self: *VM, long: bool) usize {
     }
 }
 
+inline fn currentFrame(self: *VM) *CallFrame {
+    return &self.frames[self.frameCount - 1];
+}
+
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
+    var frame = self.currentFrame();
     var debug_offset: usize = 0;
     var global_count: usize = 0;
     var string_count: usize = 0;
@@ -405,11 +413,11 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .GET_LOCAL => {
                 const slot = self.readU16();
-                try self.push(self.stack[slot]);
+                try self.push(frame.slots[slot]);
             },
             .SET_LOCAL => {
                 const slot = self.readU16();
-                self.stack[slot] = self.peek(0);
+                frame.slots[slot] = self.peek(0);
             },
             .JUMP => {
                 const offset = self.readU16();
