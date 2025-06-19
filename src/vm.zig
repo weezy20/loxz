@@ -183,7 +183,7 @@ pub fn interpret(self: *VM, chunk: *Chunk, opts: struct {
     init_string_table: ?*Table,
 }) InterpretResult {
     global_debug_level = opts.debug_level;
-    self.chunk = chunk;
+    self.currentChunk() = chunk; // TODO: Fix
     if (global_debug_level >= 2) {
         chunk.print("Loaded chunk on VM");
     }
@@ -229,6 +229,9 @@ inline fn readConstant(self: *VM, long: bool) usize {
 
 inline fn currentFrame(self: *VM) *CallFrame {
     return &self.frames[self.frameCount - 1];
+}
+inline fn currentChunk(self: *VM) *Chunk {
+    return &self.currentFrame().function.chunk;
 }
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
@@ -279,7 +282,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .CONSTANT, .CONSTANT_LONG => {
                 const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
-                const constant_value = self.chunk.constants.get(constant_index) catch |err| {
+                const constant_value = self.currentChunk().constants.get(constant_index) catch |err| {
                     return err;
                 };
                 try self.push(constant_value);
@@ -378,7 +381,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .DEFINE_GLOBAL => {
                 const name_idx = self.readU16();
-                const name_val = try self.chunk.constants.get(name_idx);
+                const name_val = try self.currentChunk().constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
                 const val = try self.pop();
@@ -386,7 +389,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .GET_GLOBAL => {
                 const name_idx = self.readU16();
-                const name_val = try self.chunk.constants.get(name_idx);
+                const name_val = try self.currentChunk().constants.get(name_idx);
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 if (self.globalCache.lookup(name)) |value| {
                     try self.push(value);
@@ -404,7 +407,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .SET_GLOBAL => {
                 const name_idx = self.readU16();
-                const name = (try self.chunk.constants.get(name_idx)).asObjString().?;
+                const name = (try self.currentChunk().constants.get(name_idx)).asObjString().?;
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
                     // Call runtimeError with format string and args
@@ -525,7 +528,7 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
         // Calculate current instruction offset
         // self.ip points to the NEXT instruction, so subtract 1 for the current opcode
         // If the error is due to an operand, this might need adjustment or more info from the caller.
-        const offset = @intFromPtr(self.ip) - @intFromPtr(self.chunk.code) - 1;
+        const offset = @intFromPtr(self.currentFrame().ip) - @intFromPtr(self.currentChunk().code) - 1;
         const line = d.getLine(offset);
         // ANSI escape for yellow gold: \x1b[1;33m, reset: \x1b[0m
         if (line) |l| {
