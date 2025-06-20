@@ -182,6 +182,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         std.debug.print("Compiler init error : {s}", @errorName(err));
         return .compile_error;
     };
+    const compilerStringTable = compiler.stringTable;
     const compile_result = lib.compile(compiler, source, self, self.allocator, opts.intoCompilerOpts());
     if (!compile_result.success) {
         return .compile_error;
@@ -193,13 +194,20 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         .slots = self.stackTop, // Start with the current stack top
     };
     self.frameCount += 1;
-    if (opts.init_string_table) |t| {
-        lib.tableAddAll(@constCast(t), &self.stringTable) catch |err| {
-            std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
-        };
-    }
-    if (opts.debugInfo) |d| {
+
+    lib.tableAddAll(@constCast(&compilerStringTable), &self.stringTable) catch |err| {
+        std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
+    };
+
+    if (compile_result.debugInfo) |d| {
         self.debugInfo = d;
+    }
+    defer {
+        if (compile_result.debugInfo) |d| {
+            d.deinit();
+            self.allocator.destroy(d);
+        }
+        compiler.deinit();
     }
     // Enable stack-tracing here
     if (self.run(opts.stack_tracing)) {

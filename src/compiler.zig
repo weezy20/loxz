@@ -724,7 +724,7 @@ pub fn compile(
         };
         parser.debugInfo = di_ptr;
     }
-    if (opts.debug_level) |lvl| debug_level = lvl;
+    debug_level = opts.debug_level;
     parser.repl_mode = opts.repl_mode;
     advance();
     while (!match(TokenType.Eof)) {

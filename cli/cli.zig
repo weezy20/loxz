@@ -167,30 +167,11 @@ pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
-    var chunk = lib.Chunk.init(&allocator);
-    defer chunk.deinit();
-    var compiler = try lib.Compiler.init(allocator, vm, .Script);
-    const compile_result = lib.compile(&compiler, source, vm, allocator, .{
-        .debug = true, // Setup DebugInfo unconditionally
-        .debug_level = config.debug_level,
-        .repl_mode = config.repl_mode,
-    });
-    var compilerStringTable = compiler.stringTable;
-    defer {
-        if (compile_result.debugInfo) |d| {
-            d.deinit();
-            allocator.destroy(d);
-        }
-        compiler.deinit();
-    }
-    if (!compile_result.success) {
-        return .compile_error;
-    }
-    return lib.interpret(vm, &chunk, .{
+    _ = allocator;
+    return lib.interpret(vm, source, .{
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
-        .debugInfo = compile_result.debugInfo,
-        .init_string_table = if (compilerStringTable.count > 0) &compilerStringTable else null,
+        .repl_mode = config.repl_mode,
     });
 }
 
