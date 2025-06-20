@@ -178,16 +178,16 @@ fn pop(self: *VM) RuntimeError!Value {
 
 pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) InterpretResult {
     global_debug_level = opts.debug_level;
-    const compiler = lib.Compiler.init(self.allocator, self, .Script) catch |err| {
-        std.debug.print("Compiler init error : {s}", @errorName(err));
+    var compiler = lib.Compiler.init(self.allocator, self, .Script) catch |err| {
+        std.debug.print("Compiler init error : {s}", .{@errorName(err)});
         return .compile_error;
     };
     const compilerStringTable = compiler.stringTable;
-    const compile_result = lib.compile(compiler, source, self, self.allocator, opts.intoCompilerOpts());
+    const compile_result = lib.compile(&compiler, source, self, self.allocator, opts.intoCompilerOpts());
     if (!compile_result.success) {
         return .compile_error;
     }
-    const function = compile_result.function;
+    const function = compile_result.function.?;
     self.frames[self.frameCount] = CallFrame{
         .function = function,
         .ip = function.chunk.code,
