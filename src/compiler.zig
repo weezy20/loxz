@@ -702,52 +702,7 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     }
     try stderr.writeAll("\n");
 }
-pub fn compile(
-    compiler: *Compiler,
-    source: []const u8,
-    vm: *VM,
-    allocator: std.mem.Allocator,
-    opts: lib.CompilerOpts,
-) CompilationResult {
-    cc = compiler; // Set the global compiler instance
-    parser.allocator = allocator;
-    parser.vm = vm;
-    parser.scanner = Scanner.init(source);
-    if (opts.debug) {
-        // Allocate DebugInfo on the heap
-        const di_ptr = allocator.create(DebugInfo) catch {
-            @panic("Failed to allocate debug info");
-        };
-        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
-            allocator.destroy(di_ptr);
-            @panic("Failed to initialize debug info");
-        };
-        parser.debugInfo = di_ptr;
-    }
-    debug_level = opts.debug_level;
-    parser.repl_mode = opts.repl_mode;
-    advance();
-    while (!match(TokenType.Eof)) {
-        declaration();
-    }
-    const function = endCompiler(allocator) catch |err| b: {
-        std.debug.print("[Compiler Error]: {s}\n", .{@errorName(err)});
-        break :b null;
-    };
-    const retval: CompilationResult = .{
-        .function = function,
-        .success = !parser.had_error,
-        .debugInfo = parser.debugInfo,
-    };
-    return retval;
-}
-/// `allocator` is only used in debug mode
-inline fn endCompiler(allocator: std.mem.Allocator) !*ObjFunction {
-    if (debug_level > 0 and !parser.had_error)
-        currentChunk().disassemble(allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
-    try emitReturn();
-    return cc.function;
-}
+
 inline fn emitReturn() !void {
     try emitByte(@intFromEnum(OpCode.RETURN));
 }
@@ -891,6 +846,52 @@ const rules = [_]ParseRule{
     // TOKEN_COLON
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
 };
+
+pub fn compile(
+    compiler: *Compiler,
+    source: []const u8,
+    vm: *VM,
+    allocator: std.mem.Allocator,
+    opts: lib.CompilerOpts,
+) CompilationResult {
+    cc = compiler; // Set the global compiler instance
+    parser.allocator = allocator;
+    parser.vm = vm;
+    parser.scanner = Scanner.init(source);
+    if (opts.debug) {
+        // Allocate DebugInfo on the heap
+        const di_ptr = allocator.create(DebugInfo) catch {
+            @panic("Failed to allocate debug info");
+        };
+        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+            allocator.destroy(di_ptr);
+            @panic("Failed to initialize debug info");
+        };
+        parser.debugInfo = di_ptr;
+    }
+    debug_level = opts.debug_level;
+    parser.repl_mode = opts.repl_mode;
+    advance();
+    while (!match(TokenType.Eof)) {
+        declaration();
+    }
+    const function = endCompiler(allocator) catch |err| b: {
+        std.debug.print("[Compiler Error]: {s}\n", .{@errorName(err)});
+        break :b null;
+    };
+    return .{
+        .function = function,
+        .success = !parser.had_error,
+        .debugInfo = parser.debugInfo,
+    };
+}
+/// `allocator` is only used in debug mode
+inline fn endCompiler(allocator: std.mem.Allocator) !*ObjFunction {
+    if (debug_level > 0 and !parser.had_error)
+        currentChunk().disassemble(allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+    try emitReturn();
+    return cc.function;
+}
 
 const CompilationResult = struct {
     success: bool,
