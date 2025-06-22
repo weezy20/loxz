@@ -18,7 +18,7 @@ pub const Chunk = struct {
             .count = 0,
             .capacity = 0,
             .code = undefined,
-            .constants = ValueArray.init() catch @panic("Failed to initialize ValueArray for Chunk"),
+            .constants = ValueArray.init(),
         };
     }
     /// Free the Chunk

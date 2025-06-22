@@ -58,7 +58,7 @@ pub const Object = struct {
         obj_function.* = .{
             .name = if (name) |n| n.clone() else null,
             .arity = arity orelse 0,
-            .chunk = Chunk.init(&allocator),
+            .chunk = Chunk.init(&vm.allocator),
         };
 
         // Create the Object wrapper
@@ -267,12 +267,11 @@ pub fn newFunction(
     arity: ?u32,
 ) !*ObjFunction {
     // Create the function object
-    const allocator = vm.allocator;
-    const obj_func = try allocator.create(ObjFunction);
+    const obj_func = try vm.allocator.create(ObjFunction);
     obj_func.* = ObjFunction{
         .name = if (name) |n| n.clone() else null,
         .arity = arity orelse 0,
-        .chunk = Chunk.init(&allocator),
+        .chunk = Chunk.init(&vm.allocator),
     };
     return obj_func;
 }

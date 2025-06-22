@@ -191,7 +191,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
     self.frames[self.frameCount] = CallFrame{
         .function = function,
         .ip = function.chunk.code,
-        .slots = self.stackTop, // Start with the current stack top
+        .slots = self.stack,
     };
     self.frameCount += 1;
 

@@ -131,7 +131,7 @@ pub const ValueArray = struct {
     count: usize,
     capacity: usize,
 
-    pub fn init() !ValueArray {
+    pub fn init() ValueArray {
         return ValueArray{
             .values = &[_]Value{},
             .count = 0,
