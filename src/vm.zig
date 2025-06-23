@@ -174,6 +174,19 @@ pub fn addObj(self: *VM, obj: *Object) void {
     self.objects = obj;
 }
 
+pub fn addObjFunction(self: *VM, function: *ObjFunction) !void {
+    const obj_wrapper = try self.allocator.create(Object);
+    errdefer self.allocator.destroy(obj_wrapper);
+    obj_wrapper.* = Object{
+        .allocator = self.allocator,
+        .data = .{ .Function = function },
+    };
+    if (global_debug_level > 0)
+        std.debug.print("Adding function ref {s} to VM\n", .{obj_wrapper});
+    obj_wrapper.next = self.objects;
+    self.objects = obj_wrapper;
+}
+
 fn pop(self: *VM) RuntimeError!Value {
     if (self.stackSize() == 0) {
         return RuntimeError.StackUnderflow;
@@ -194,6 +207,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         return .compile_error;
     }
     const function = compile_result.function.?;
+    self.addObjFunction(function) catch return .compile_error;
     self.frames[self.frameCount] = CallFrame{
         .function = function,
         .ip = function.chunk.code,
