@@ -151,7 +151,7 @@ fn variable() void {
     namedVariable(
         parser.previous,
         parser.canAssign.?,
-        &cc.stringTable,
+        cc.stringTable,
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
@@ -190,7 +190,7 @@ fn string() void {
         const objstr = Object.newString(
             parser.vm,
             &[_][]const u8{str},
-            &cc.stringTable,
+            cc.stringTable,
         ) catch @panic(HEAP_FAIL);
         // In REPL mode, we need to allocate the string as the line buffer will get deallocated
         break :b Value{ .Obj = objstr.obj };
@@ -598,7 +598,7 @@ fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
-    const global: usize = parseVariable("Expect variable name.", &cc.stringTable);
+    const global: usize = parseVariable("Expect variable name.", cc.stringTable);
     if (global > std.math.maxInt(u16)) {
         Error("Cannot declare more than 65535 variables in a single function");
         return;
@@ -908,9 +908,9 @@ pub const Compiler = struct {
     /// Number of blocks surrounding current code block
     scopeDepth: i32, // Same as clox
     /// Compiler constant Table
-    constantTable: Table,
+    constantTable: *Table,
     /// Compiler string table
-    stringTable: Table,
+    stringTable: *Table,
     /// Switch depth
     switchDepth: u8 = 0,
 
@@ -931,8 +931,8 @@ pub const Compiler = struct {
         return .{
             .locals = locals,
             .scopeDepth = 0,
-            .stringTable = Table.init(allocator),
-            .constantTable = Table.initWithHashFn(allocator, .default),
+            .stringTable = try Table.init(allocator),
+            .constantTable = try Table.initWithHashFn(allocator, .default),
             .function = try lib.newFunction(vm, null, null),
             .type = @"type",
         };

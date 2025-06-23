@@ -18,9 +18,9 @@ stackTop: [*]Value,
 /// Allocated objects (redundant if using Arena allocator)
 objects: ?*Object = null,
 /// String HashSet
-stringTable: Table,
+stringTable: *Table,
 /// Global variables
-globals: Table,
+globals: *Table,
 /// Cache for global variables
 globalCache: GlobalCache,
 /// Switch stack
@@ -91,8 +91,14 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .allocator = allocator,
         .stack = stackInit,
         .stackTop = stackInit,
-        .stringTable = Table.init(allocator),
-        .globals = Table.init(allocator),
+        .stringTable = Table.init(allocator) catch |err| {
+            std.debug.print("Error initializing string table: {s}\n", .{@errorName(err)});
+            std.process.exit(101);
+        },
+        .globals = Table.init(allocator) catch |err| {
+            std.debug.print("Error initializing string table: {s}\n", .{@errorName(err)});
+            std.process.exit(101);
+        },
         .globalCache = GlobalCache.init(),
         .switchStack = std.BoundedArray(Value, MAX_SWITCH_DEPTH).init(0) catch |err| {
             // We fail silently here, as the switch-case is not a critical lox language feature but an extension.
@@ -195,7 +201,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
     };
     self.frameCount += 1;
 
-    lib.tableAddAll(@constCast(&compilerStringTable), &self.stringTable) catch |err| {
+    lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
         std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
     };
 
@@ -315,7 +321,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     const o = try Object.newString(
                         self,
                         &[_][]const u8{ lhstr, rhstr },
-                        &self.stringTable,
+                        self.stringTable,
                     );
                     try self.push(Value{ .Obj = o.obj });
                     break :add;

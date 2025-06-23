@@ -13,16 +13,19 @@ pub const Table = struct {
     entries: []align(8) Entry,
     hash_fn: *const fn ([]const u8) u64 = loxHash,
 
-    pub fn init(allocator: std.mem.Allocator) Table {
-        return Table{
+    pub fn init(allocator: std.mem.Allocator) !*Table {
+        const t = try allocator.create(Table);
+        t.* = Table{
             .allocator = allocator,
             .count = 0,
             .capacity = 0,
             .entries = undefined,
         };
+        return t;
     }
-    pub fn initWithHashFn(allocator: std.mem.Allocator, hash_fn: enum { clhash, loxhash, default }) Table {
-        return Table{
+    pub fn initWithHashFn(allocator: std.mem.Allocator, hash_fn: enum { clhash, loxhash, default }) !*Table {
+        const t = try allocator.create(Table);
+        t.* = Table{
             .allocator = allocator,
             .count = 0,
             .capacity = 0,
@@ -32,12 +35,13 @@ pub const Table = struct {
                 .default, .loxhash => loxHash,
             },
         };
+        return t;
     }
     pub fn deinit(self: *Table) void {
         if (self.capacity > 0) {
             self.allocator.free(@as([]align(8) Entry, self.entries[0..self.capacity]));
         }
-        self.* = undefined;
+        self.allocator.destroy(self);
     }
     pub fn set(table: *Table, key: *const ObjString, value: Value) !bool {
         // Grow the array at 75% capacity, can't multiply float with int hence..
