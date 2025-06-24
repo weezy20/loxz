@@ -82,7 +82,10 @@ fn validate_file(file: []const u8) !void {
     file_exists.close();
 }
 
-pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
+pub fn repl(config: *Config) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     try stdout.writeAll("\u{1F4BB} Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");

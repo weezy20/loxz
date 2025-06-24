@@ -16,7 +16,7 @@ pub fn main() !void {
     if (config.file_path) |_| {
         return cli.run_file(allocator, &config);
     } else {
-        return cli.repl(allocator, &config);
+        return cli.repl(&config);
     }
 }
 

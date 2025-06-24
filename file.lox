@@ -14,10 +14,11 @@ if (woke_up_early and !hungry) {
 }
 
 // Test logical or/and
-if (hungry or !woke_up_early) {
-    print "Making a big breakfast!";
-} else {
-    print "Just a quick bite.";
+switch (hungry or !woke_up_early) {
+    case true:
+        print "Making a big breakfast!";
+    case false:
+        print "Just a quick bite.";
 }
 
 print breakfast;
