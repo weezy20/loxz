@@ -639,8 +639,9 @@ fn defineFunction(ty: FunctionType) void {
     ) catch @panic("Error: Initializing compiler for function");
 
     const enclosing_compiler = cc;
-    cc = &compiler;
-
+    cc = &compiler; // Set current compiler to the new function compiler
+    cc.constantTable = enclosing_compiler.constantTable; // Borrow tables
+    cc.stringTable = enclosing_compiler.stringTable;
     // The function's name is the previous token. We set it in the new function object.
     cc.function.name = (Object.newString(parser.vm, &.{parser.previous.lexeme}, cc.stringTable) catch @panic(HEAP_FAIL)).obj.asObjString();
 
@@ -661,6 +662,9 @@ fn defineFunction(ty: FunctionType) void {
     cc = enclosing_compiler;
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
     emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = obj })) catch @panic("Failed to emit function constant bytecode");
+
+    // Deinit heap-allocations for current compiler but not the stringTable or constantTable as they're owned by parent compiler
+    compiler.locals.deinit();
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
