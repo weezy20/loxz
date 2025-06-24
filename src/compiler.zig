@@ -591,10 +591,9 @@ fn identifiersEqual(a: *const Token, b: *const Token) bool {
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
+    if (parser.panic_mode) return 0;
     declareLocalVariable(); // Entry point for local variable declaration
     if (cc.scopeDepth > 0) return 0; // Dummy index, var already handled by declareLocalVariable
-
-    //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
@@ -619,14 +618,59 @@ fn defineVariable(global: usize) void {
     }
     emitU16Op(OpCode.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
+/// Function declaration
+fn funDeclaration() void {
+    const global: usize = parseVariable("Expect function name.", cc.stringTable);
+    if (global > std.math.maxInt(u16)) {
+        // TODO: Switch to error propagation
+        Error("Cannot declare more than 65535 functions in a single file");
+        return;
+    }
+    markInitialized();
+    defineFunction(FunctionType.Function);
+    defineVariable(global);
+}
+fn defineFunction(ty: FunctionType) void {
+    // We pass the parent's string table to share interned strings.
+    var compiler = Compiler.init(
+        parser.allocator,
+        parser.vm,
+        ty,
+    ) catch @panic("Error: Initializing compiler for function");
+
+    const enclosing_compiler = cc;
+    cc = &compiler;
+
+    // The function's name is the previous token. We set it in the new function object.
+    cc.function.name = (Object.newString(parser.vm, &.{parser.previous.lexeme}, cc.stringTable) catch @panic(HEAP_FAIL)).obj.asObjString();
+
+    beginScope();
+    consume(TokenType.LeftParen, "Expect '(' after function name.");
+    // TODO: Parse parameters here.
+    // if (!check(TokenType.RightParen)) {
+    //     // do-while loop to parse comma-separated parameters
+    //     // until we hit the right parenthesis.
+    // }
+    consume(TokenType.RightParen, "Expect ')' after function parameters.");
+    consume(TokenType.LeftBrace, "Expect '{' before function body.");
+    block();
+
+    const func = endCompiler() catch @panic("Failed to compile function");
+
+    // Restore the enclosing compiler
+    cc = enclosing_compiler;
+
+    emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = func })) catch @panic("Failed to emit function constant bytecode");
+}
 /// Emit bytecode for a declaration
 fn declaration() void {
-    if (match(TokenType.Var)) varDeclaration() else statement();
+    if (match(TokenType.Fun)) funDeclaration() else if (match(TokenType.Var)) varDeclaration() else statement();
     if (parser.panic_mode) synchronize();
 }
 /// Mark the last local variable as initialized.
-/// Declaring” is when the variable is added to the scope
+/// Declaring is when the variable is added to the scope
 fn markInitialized() void {
+    if (cc.scopeDepth == 0) return; // Functions in global scope such as the top level function
     if (cc.localCount() == 0) return; // No locals in the current scope
     cc.locals.items[cc.localCount() - 1].depth = cc.scopeDepth;
 }
@@ -875,7 +919,7 @@ pub fn compile(
     while (!match(TokenType.Eof)) {
         declaration();
     }
-    const function = endCompiler(allocator) catch |err| b: {
+    const function = endCompiler() catch |err| b: {
         std.debug.print("[Compiler Error]: {s}\n", .{@errorName(err)});
         break :b null;
     };
@@ -885,10 +929,8 @@ pub fn compile(
         .debugInfo = parser.debugInfo,
     };
 }
-/// `allocator` is only used in debug mode
-inline fn endCompiler(allocator: std.mem.Allocator) !*ObjFunction {
-    if (debug_level > 0 and !parser.had_error)
-        currentChunk().disassemble(allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+
+inline fn endCompiler() !*ObjFunction {
     try emitReturn();
     return cc.function;
 }
