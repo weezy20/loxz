@@ -659,8 +659,8 @@ fn defineFunction(ty: FunctionType) void {
 
     // Restore the enclosing compiler
     cc = enclosing_compiler;
-
-    emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = func })) catch @panic("Failed to emit function constant bytecode");
+    const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
+    emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = obj })) catch @panic("Failed to emit function constant bytecode");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
