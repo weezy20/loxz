@@ -931,6 +931,8 @@ pub fn compile(
 }
 
 inline fn endCompiler() !*ObjFunction {
+    if (debug_level > 0 and !parser.had_error)
+        currentChunk().disassemble(parser.vm.allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
     try emitReturn();
     return cc.function;
 }
