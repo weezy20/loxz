@@ -523,8 +523,8 @@ fn statement() void {
         },
     }
 }
-/// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
-/// index is u16
+/// Build an interned constant for a variable name and return its index in the chunk's constants table.
+/// index is u16 upcasted to a usize
 fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     const obj_intern = (Object.newString(
         parser.vm,
@@ -647,11 +647,17 @@ fn defineFunction(ty: FunctionType) void {
 
     beginScope();
     consume(TokenType.LeftParen, "Expect '(' after function name.");
-    // TODO: Parse parameters here.
-    // if (!check(TokenType.RightParen)) {
-    //     // do-while loop to parse comma-separated parameters
-    //     // until we hit the right parenthesis.
-    // }
+    if (!check(TokenType.RightParen)) {
+        var condition = true;
+        while (condition) : (condition = match(TokenType.Comma)) {
+            cc.function.arity += 1;
+            if (cc.function.arity > std.math.maxInt(u8)) {
+                ErrorAtCurrent("Function cannot have more than 255 parameters.");
+            }
+            const fp = parseVariable("Expect parameter name.", cc.stringTable);
+            defineVariable(fp);
+        }
+    }
     consume(TokenType.RightParen, "Expect ')' after function parameters.");
     consume(TokenType.LeftBrace, "Expect '{' before function body.");
     block();
