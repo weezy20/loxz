@@ -756,19 +756,20 @@ inline fn emitReturn() !void {
 }
 
 const std = @import("std");
-const Chunk = @import("chunk.zig").Chunk;
-const OpCode = @import("opcode.zig").OpCode;
+const Chunk = lib.Chunk;
+const OpCode = lib.OpCode;
 const Token = @import("scanner.zig").Token;
 const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
-const Value = @import("value.zig").Value;
-const Object = @import("object.zig").Object;
+const Value = lib.Value;
+const Object = lib.Object;
+const ObjFunction = lib.ObjFunction;
 const BYTECODE_FAIL = "fatal: failed to emit bytecode";
 const HEAP_FAIL = "fatal: failed to heap allocate";
-const CompilerError = @import("error.zig").CompilerError;
-const Table = @import("table.zig").Table;
-const VM = @import("vm.zig").VM;
+const CompilerError = lib.CompilerError;
+const Table = lib.Table;
+const VM = lib.VM;
 const lib = @import("root.zig");
 
 /// Lowest to highest precedence
@@ -1025,5 +1026,3 @@ const FunctionType = enum {
     Function,
     Script,
 };
-
-const ObjFunction = @import("object.zig").ObjFunction;
