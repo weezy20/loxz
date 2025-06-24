@@ -19,7 +19,7 @@ pub const Table = struct {
             .allocator = allocator,
             .count = 0,
             .capacity = 0,
-            .entries = undefined,
+            .entries = &[_]Entry{},
         };
         return t;
     }
@@ -29,7 +29,7 @@ pub const Table = struct {
             .allocator = allocator,
             .count = 0,
             .capacity = 0,
-            .entries = undefined,
+            .entries = &[_]Entry{},
             .hash_fn = switch (hash_fn) {
                 .clhash => clhash,
                 .default, .loxhash => loxHash,
@@ -137,7 +137,7 @@ fn findEntry(entries: []Entry, capacity: usize, key: *const ObjString) *Entry {
 }
 pub fn tableAddAll(from: *Table, to: *Table) !void {
     for (from.entries) |src_entry| {
-        if (src_entry.key != null) {
+        if (src_entry.key != null and src_entry.value != null) {
             _ = try to.set(src_entry.key.?, src_entry.value.?);
         }
     }
