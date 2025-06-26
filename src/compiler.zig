@@ -631,19 +631,21 @@ fn funDeclaration() void {
     defineVariable(global);
 }
 fn defineFunction(ty: FunctionType) void {
-    // We pass the parent's string table to share interned strings.
-    var compiler = Compiler.init(
-        parser.allocator,
+    const enclosing_compiler = cc;
+
+    var local_compiler = Compiler.init(
+        parser.vm.allocator,
         parser.vm,
         ty,
-    ) catch @panic("Error: Initializing compiler for function");
+    ) catch @panic(HEAP_FAIL);
+    defer local_compiler.deinit();
 
-    const enclosing_compiler = cc;
-    cc = &compiler; // Set current compiler to the new function compiler
-    cc.constantTable = enclosing_compiler.constantTable; // Borrow tables
-    cc.stringTable = enclosing_compiler.stringTable;
-    // The function's name is the previous token. We set it in the new function object.
-    cc.function.name = (Object.newString(parser.vm, &.{parser.previous.lexeme}, cc.stringTable) catch @panic(HEAP_FAIL)).obj.asObjString();
+    cc = &local_compiler; // Set current compiler to the new function compiler
+
+    // The function's name was already interned by parseVariable. We look it up
+    // here to avoid calling newString again, which was causing a double-free.
+    // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
+    cc.function.name = lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone();
 
     beginScope();
     consume(TokenType.LeftParen, "Expect '(' after function name.");
@@ -669,8 +671,7 @@ fn defineFunction(ty: FunctionType) void {
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
     emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = obj })) catch @panic("Failed to emit function constant bytecode");
 
-    // Deinit heap-allocations for current compiler but not the stringTable or constantTable as they're owned by parent compiler
-    compiler.locals.deinit();
+    lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
@@ -975,7 +976,7 @@ pub const Compiler = struct {
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
     pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
-        var locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array");
+        var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
         // Claim slot 0 for vm usage
         try locals.append(Local{ .depth = 0, .name = Token{
             .tokenType = TokenType.Error,

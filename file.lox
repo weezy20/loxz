@@ -23,3 +23,7 @@ switch (hungry or !woke_up_early) {
 
 print breakfast;
 print beverage;
+
+fun foo() {
+    print "foo";
+}
