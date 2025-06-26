@@ -275,8 +275,8 @@ fn unary() void {
     // Compile the operand
     parsePrecedence(Precedence.Unary);
     switch (operatorType) {
-        TokenType.Minus => emitByte(@intFromEnum(OpCode.NEGATE)) catch @panic(BYTECODE_FAIL),
-        TokenType.Bang => emitByte(@intFromEnum(OpCode.NOT)) catch @panic(BYTECODE_FAIL),
+        TokenType.Minus => emit.op(OpCode.NEGATE),
+        TokenType.Bang => emit.op(OpCode.NOT),
         else => return,
     }
 }
