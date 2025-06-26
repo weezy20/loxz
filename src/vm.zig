@@ -302,13 +302,15 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
         const instruction = @as(OpCode, @enumFromInt(self.readByte()));
         switch (instruction) {
             .RETURN => {
-                // const ret_val = try self.pop();
-                // self.frameCount -= 1;
-                // if (self.frameCount == 0) {
-                //     return;
-                // }
-                // std.debug.print("{s}\n", .{val});
-                return;
+                const ret_val = try self.pop();
+                self.frameCount -= 1;
+                if (self.frameCount == 0) {
+                    _ = try self.pop();
+                    return;
+                }
+                self.stackTop = frame.slots;
+                try self.push(ret_val);
+                frame = self.currentFrame();
             },
             .CONSTANT, .CONSTANT_LONG => {
                 const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
