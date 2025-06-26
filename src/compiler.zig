@@ -672,7 +672,7 @@ fn defineFunction(ty: FunctionType) void {
     // Restore the enclosing compiler
     cc = enclosing_compiler;
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
-    emitU16Op(OpCode.CONSTANT_LONG, makeConstant(Value{ .Obj = obj })) catch @panic("Failed to emit function constant bytecode");
+    emitConstant(Value{ .Obj = obj }) catch @panic("Failed to emit function constant bytecode");
 
     lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
