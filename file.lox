@@ -1,29 +1,34 @@
-var breakfast = "beignets";
-var beverage = "cafe au lait";
-var woke_up_early = true;
-var hungry = false;
+// var breakfast = "beignets";
+// var beverage = "cafe au lait";
+// var woke_up_early = true;
+// var hungry = false;
 
-// Test if/else
-if (woke_up_early and !hungry) {
-    breakfast = "beignets";
-    beverage = "espresso";
-} else if (woke_up_early or hungry) {
-    breakfast = "beignets with " + beverage;
-} else {
-    breakfast = "oops woke up late, anyways eating beignets with " + beverage;
+// // Test if/else
+// if (woke_up_early and !hungry) {
+//     breakfast = "beignets";
+//     beverage = "espresso";
+// } else if (woke_up_early or hungry) {
+//     breakfast = "beignets with " + beverage;
+// } else {
+//     breakfast = "oops woke up late, anyways eating beignets with " + beverage;
+// }
+
+// // Test logical or/and
+// switch (hungry or !woke_up_early) {
+//     case true:
+//         print "Making a big breakfast!";
+//     case false:
+//         print "Just a quick bite.";
+// }
+
+// print breakfast;
+// print beverage;
+
+// fun foo() {
+//     print "foo";
+// }
+fun areWeHavingItYet() {
+  print "Yes we are!";
 }
 
-// Test logical or/and
-switch (hungry or !woke_up_early) {
-    case true:
-        print "Making a big breakfast!";
-    case false:
-        print "Just a quick bite.";
-}
-
-print breakfast;
-print beverage;
-
-fun foo() {
-    print "foo";
-}
+print areWeHavingItYet;

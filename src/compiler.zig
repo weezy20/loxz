@@ -645,7 +645,10 @@ fn defineFunction(ty: FunctionType) void {
     // The function's name was already interned by parseVariable. We look it up
     // here to avoid calling newString again, which was causing a double-free.
     // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
-    cc.function.name = lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone();
+    cc.function.name = if (ty == FunctionType.Function)
+        lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone()
+    else
+        null;
 
     beginScope();
     consume(TokenType.LeftParen, "Expect '(' after function name.");
