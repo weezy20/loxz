@@ -83,22 +83,6 @@ pub const Value = union(enum) {
             },
         };
     }
-    /// Compare value types not values. For values use `isEqual`.
-    pub fn isSameType(self: *const Value, other: *const Value) bool {
-        switch (.{ self.*, other.* }) {
-            // Both are numbers
-            .{ .Number, .Number } => return true,
-            // Both are strings
-            .{ .String, .String } => return true,
-            // Both are booleans
-            .{ .Bool, .Bool } => return true,
-            // Both are nil
-            .{ .Nil, .Nil } => return true,
-            // Both are objects
-            .{ .Obj, .Obj } => self.Obj.objType() == other.Obj.objType(),
-            else => return false,
-        }
-    }
     /// Check if the value is an object and return it if so.
     pub fn isObject(self: *const Value) ?*Object {
         if (self.* == .Obj) {
@@ -115,6 +99,17 @@ pub const Value = union(enum) {
         }
         return null;
     }
+
+    /// Check if the value is an ObjFunction
+    pub fn isFunction(self: *const Value) ?*lib.ObjFunction {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Function) {
+                return obj.data.Function;
+            }
+        }
+        return null;
+    }
+
     pub fn isFalsey(self: *const Value) bool {
         return switch (self.*) {
             .Nil => true,

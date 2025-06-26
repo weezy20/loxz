@@ -12,7 +12,7 @@ pub const InterpreterOpts = struct {
 
     pub fn intoCompilerOpts(opts: InterpreterOpts) CompilerOpts {
         return CompilerOpts{
-            .debug = opts.debug_level > 0,
+            .debug = true, // We need line info so we hardcode debug == true
             .debug_level = opts.debug_level,
             .repl_mode = opts.repl_mode,
         };

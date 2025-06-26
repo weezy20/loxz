@@ -208,13 +208,9 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         return .compile_error;
     }
     const function = compile_result.function.?;
-    _ = self.addObjFunction(function) catch return .compile_error;
-    self.frames[self.frameCount] = CallFrame{
-        .function = function,
-        .ip = function.chunk.code,
-        .slots = self.stack,
-    };
-    self.frameCount += 1;
+    const obj = self.addObjFunction(function) catch return .compile_error;
+    self.push(Value{ .Obj = obj }) catch |err| return .{ .runtime_error = err };
+    _ = self.call(function, 0);
 
     lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
         std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
@@ -496,6 +492,13 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const case_value = try self.pop();
                 try self.push(Value{ .Bool = switch_value.isEqual(&case_value) });
             },
+            .CALL => {
+                const arg_count = self.readByte();
+                if (!self.callValue(self.peek(arg_count), arg_count)) {
+                    return RuntimeError.InvalidCall;
+                }
+                frame = self.currentFrame();
+            },
 
             // else => {
             //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
@@ -503,6 +506,30 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             // },
         }
     }
+}
+
+fn callValue(self: *VM, callee: Value, arg_count: u8) bool {
+    if (callee.isFunction()) |function| {
+        return self.call(function, arg_count);
+    }
+    return false;
+}
+/// Setup callframe
+fn call(self: *VM, function: *ObjFunction, arg_count: u8) bool {
+    if (function.arity != arg_count) {
+        self.runtimeError("Expected {d} arguments but got {d}", .{ function.arity, arg_count });
+        return false;
+    }
+    if (self.frameCount == FRAMES_MAX) {
+        self.runtimeError("Stack overflow", .{});
+        return false;
+    }
+    var frame = &self.frames[self.frameCount];
+    self.frameCount += 1;
+    frame.function = function;
+    frame.ip = function.chunk.code;
+    frame.slots = self.stackTop - arg_count - 1;
+    return true;
 }
 
 fn printValue(value: Value) void {
@@ -579,4 +606,31 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
         stderr.print(fmt_str, args) catch {};
         stderr.print("\n", .{}) catch {};
     }
+
+    // Print stack trace
+    var i = self.frameCount - 1;
+    while (i >= 0) : (i -= 1) {
+        const frame = &self.frames[i];
+        const function = frame.function;
+        const instruction = frame.ip - function.chunk.code - 1;
+
+        if (self.debugInfo) |d| {
+            if (d.getLine(instruction)) |line| {
+                stderr.print("[line {d}] in ", .{line}) catch {};
+            } else {
+                stderr.print("[line ?] in ", .{}) catch {};
+            }
+        } else {
+            stderr.print("[line ?] in ", .{}) catch {};
+        }
+
+        if (function.name) |name| {
+            stderr.print("{s}()\n", .{name.chars}) catch {};
+        } else {
+            stderr.print("script\n", .{}) catch {};
+        }
+        if (i == 0) break;
+    }
+
+    self.resetStack();
 }
