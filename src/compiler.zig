@@ -241,6 +241,28 @@ fn binary() void {
         else => return, // Unreachable
     }
 }
+fn argumentList() u8 {
+    var arg_count: u8 = 0;
+    if (!check(TokenType.RightParen)) {
+        while (true) {
+            if (arg_count == std.math.maxInt(u8)) {
+                Error("Cannot have more than 255 arguments.");
+                return arg_count;
+            }
+            expression();
+            arg_count += 1;
+            if (!match(TokenType.Comma)) break;
+        }
+    }
+    consume(TokenType.RightParen, "Expect ')' after arguments.");
+    return arg_count;
+}
+/// Function calls are an infix `(` preceeded by an ident and followed by idents or `)`
+fn call() void {
+    const arg_count = argumentList();
+    emit.op(OpCode.CALL);
+    emit.byte(arg_count);
+}
 /// Assumes TokenType.LeftParen is already consumed
 fn grouping() void {
     expression();
@@ -815,7 +837,7 @@ fn getRule(tokenType: TokenType) *const ParseRule {
 
 const rules = [_]ParseRule{
     // TOKEN_LEFT_PAREN
-    ParseRule{ .prefix = grouping, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = grouping, .infix = call, .precedence = Precedence.Call },
     // TOKEN_RIGHT_PAREN
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_LEFT_BRACE

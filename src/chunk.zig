@@ -195,4 +195,44 @@ const Allocator = std.mem.Allocator;
 const expect = std.testing.expect;
 const DebugInfo = debug.DebugInfo;
 const Location = debug.Location;
-const OpCode = lib.OpCode;
+
+pub const OpCode = enum(u8) {
+    RETURN = 0x00,
+    CONSTANT,
+    CONSTANT_LONG,
+    NEGATE,
+    // Arithmetic OPs
+    ADD,
+    SUBTRACT,
+    MULTIPLY,
+    DIVIDE,
+    MOD,
+    // Nil
+    NIL,
+    // Boolean values
+    TRUE,
+    FALSE,
+    // Logical ops
+    NOT,
+    // AND,
+    // OR,
+    EQUAL, // a != b is !(a == b)
+    LESS, // a >= b is !(a < b)
+    GREATER, // a <= b is !(a > b)
+    PRINT,
+    POP,
+    // Globals
+    DEFINE_GLOBAL,
+    GET_GLOBAL,
+    SET_GLOBAL,
+    // Locals
+    GET_LOCAL,
+    SET_LOCAL,
+    // Control flow
+    JUMP,
+    JUMP_IF_FALSE,
+    LOOP,
+    SWITCH_VAL,
+    SWITCH_COMP,
+    CALL,
+};
