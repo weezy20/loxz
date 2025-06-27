@@ -464,6 +464,15 @@ fn ifStatement() void {
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
+fn returnStatement() void {
+    if (match(TokenType.Semicolon)) {
+        emitReturn();
+    } else {
+        expression();
+        consume(TokenType.Semicolon, "Expect ';' after return value.");
+        emit.op(OpCode.RETURN);
+    }
+}
 fn forStatement() void {
     beginScope();
     // > For loop initializer
@@ -527,6 +536,10 @@ fn statement() void {
         TokenType.If => {
             advance();
             ifStatement();
+        },
+        TokenType.Return => {
+            advance();
+            returnStatement();
         },
         TokenType.Switch => {
             advance();
@@ -975,7 +988,7 @@ pub fn compile(
 inline fn endCompiler() !*ObjFunction {
     if (debug_level > 0 and !parser.had_error)
         currentChunk().disassemble(parser.vm.allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
-    try emitReturn();
+    emitReturn();
     return cc.function;
 }
 
