@@ -672,6 +672,10 @@ fn defineFunction(ty: FunctionType) void {
     else
         null;
 
+    if (ty != .Script) {
+        cc.locals.items[0].name = parser.previous;
+    }
+
     beginScope();
     consume(TokenType.LeftParen, "Expect '(' after function name.");
     if (!check(TokenType.RightParen)) {
