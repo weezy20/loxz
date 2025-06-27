@@ -210,7 +210,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
     const function = compile_result.function.?;
     const obj = self.addObjFunction(function) catch return .compile_error;
     self.push(Value{ .Obj = obj }) catch |err| return .{ .runtime_error = err };
-    _ = self.call(function, 0);
+    self.call(function, 0) catch |err| return .{ .runtime_error = err };
 
     lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
         std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
@@ -496,9 +496,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .CALL => {
                 const arg_count = self.readByte();
-                if (!self.callValue(self.peek(arg_count), arg_count)) {
-                    return RuntimeError.InvalidCall;
-                }
+                try self.callValue(self.peek(arg_count), arg_count);
                 frame = self.currentFrame();
             },
 
@@ -510,28 +508,28 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
     }
 }
 
-fn callValue(self: *VM, callee: Value, arg_count: u8) bool {
+fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
     if (callee.isFunction()) |function| {
         return self.call(function, arg_count);
     }
-    return false;
+    self.runtimeError("Can only call functions and classes.", .{});
+    return RuntimeError.InvalidCall;
 }
 /// Setup callframe
-fn call(self: *VM, function: *ObjFunction, arg_count: u8) bool {
+fn call(self: *VM, function: *ObjFunction, arg_count: u8) RuntimeError!void {
     if (function.arity != arg_count) {
         self.runtimeError("Expected {d} arguments but got {d}", .{ function.arity, arg_count });
-        return false;
+        return RuntimeError.InvalidCall;
     }
     if (self.frameCount == FRAMES_MAX) {
         self.runtimeError("Stack overflow", .{});
-        return false;
+        return RuntimeError.InvalidCall;
     }
     var frame = &self.frames[self.frameCount];
     self.frameCount += 1;
     frame.function = function;
     frame.ip = function.chunk.code;
     frame.slots = self.stackTop - arg_count - 1;
-    return true;
 }
 
 fn printValue(value: Value) void {
