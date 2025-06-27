@@ -465,6 +465,10 @@ fn ifStatement() void {
     patchJump(elseJump);
 }
 fn returnStatement() void {
+    if (cc.type != .Function) {
+        Error("Cannot return from top-level code.");
+        return;
+    }
     if (match(TokenType.Semicolon)) {
         emitReturn();
     } else {
