@@ -787,8 +787,9 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     try stderr.writeAll("\n");
 }
 
-inline fn emitReturn() !void {
-    try emitByte(@intFromEnum(OpCode.RETURN));
+inline fn emitReturn() void {
+    emit.op(OpCode.NIL);
+    emit.op(OpCode.RETURN);
 }
 
 const std = @import("std");
