@@ -609,6 +609,7 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
 
     // Print stack trace
     var i = self.frameCount - 1;
+    stderr.print("== Stack trace ==\n", .{}) catch {};
     while (i >= 0) : (i -= 1) {
         const frame = &self.frames[i];
         const function = frame.function;
