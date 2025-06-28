@@ -96,7 +96,7 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
             std.process.exit(101);
         },
         .globals = Table.init(allocator) catch |err| {
-            std.debug.print("Error initializing string table: {s}\n", .{@errorName(err)});
+            std.debug.print("Error initializing globals table: {s}\n", .{@errorName(err)});
             std.process.exit(101);
         },
         .globalCache = GlobalCache.init(),
