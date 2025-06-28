@@ -1,7 +1,4 @@
 pub fn main() !void {
-    // var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    // const allocator = arena.allocator();
-    // defer arena.deinit();
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer _ = gpa.deinit();
@@ -16,7 +13,7 @@ pub fn main() !void {
     if (config.file_path) |_| {
         return cli.run_file(allocator, &config);
     } else {
-        return cli.repl(allocator, &config);
+        return cli.repl(&config);
     }
 }
 

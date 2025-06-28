@@ -1,0 +1,10 @@
+fun test() {
+  var a = 1;
+  for (var i = 0; i < 1; i = i + 1) {
+    var x = "dangling";
+    return 42; // We want to return from here
+  }
+  print "this is never reached";
+}
+
+test();

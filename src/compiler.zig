@@ -1,5 +1,5 @@
 var debug_level: u8 = 0;
-// Current compiler global
+/// Compiler global singleton
 var cc: *Compiler = undefined;
 var parser: Parser = Parser{
     // This will get overwritten by advance() and pushed into .previous
@@ -20,8 +20,8 @@ var parser: Parser = Parser{
     .vm = undefined,
     .canAssign = null,
 };
-var compilingChunk: *Chunk = undefined;
 const stderr = std.io.getStdErr().writer();
+
 const Parser = struct {
     previous: Token,
     current: Token,
@@ -151,7 +151,7 @@ fn variable() void {
     namedVariable(
         parser.previous,
         parser.canAssign.?,
-        &cc.stringTable,
+        cc.stringTable,
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
@@ -190,7 +190,7 @@ fn string() void {
         const objstr = Object.newString(
             parser.vm,
             &[_][]const u8{str},
-            &cc.stringTable,
+            cc.stringTable,
         ) catch @panic(HEAP_FAIL);
         // In REPL mode, we need to allocate the string as the line buffer will get deallocated
         break :b Value{ .Obj = objstr.obj };
@@ -241,6 +241,28 @@ fn binary() void {
         else => return, // Unreachable
     }
 }
+fn argumentList() u8 {
+    var arg_count: u8 = 0;
+    if (!check(TokenType.RightParen)) {
+        while (true) {
+            if (arg_count == std.math.maxInt(u8)) {
+                Error("Cannot have more than 255 arguments.");
+                return arg_count;
+            }
+            expression();
+            arg_count += 1;
+            if (!match(TokenType.Comma)) break;
+        }
+    }
+    consume(TokenType.RightParen, "Expect ')' after arguments.");
+    return arg_count;
+}
+/// Function calls are an infix `(` preceeded by an ident and followed by idents or `)`
+fn call() void {
+    const arg_count = argumentList();
+    emit.op(OpCode.CALL);
+    emit.byte(arg_count);
+}
 /// Assumes TokenType.LeftParen is already consumed
 fn grouping() void {
     expression();
@@ -253,8 +275,8 @@ fn unary() void {
     // Compile the operand
     parsePrecedence(Precedence.Unary);
     switch (operatorType) {
-        TokenType.Minus => emitByte(@intFromEnum(OpCode.NEGATE)) catch @panic(BYTECODE_FAIL),
-        TokenType.Bang => emitByte(@intFromEnum(OpCode.NOT)) catch @panic(BYTECODE_FAIL),
+        TokenType.Minus => emit.op(OpCode.NEGATE),
+        TokenType.Bang => emit.op(OpCode.NOT),
         else => return,
     }
 }
@@ -442,6 +464,19 @@ fn ifStatement() void {
     if (match(TokenType.Else)) statement();
     patchJump(elseJump);
 }
+fn returnStatement() void {
+    if (cc.type != .Function) {
+        Error("Cannot return from top-level code.");
+        return;
+    }
+    if (match(TokenType.Semicolon)) {
+        emitReturn();
+    } else {
+        expression();
+        consume(TokenType.Semicolon, "Expect ';' after return value.");
+        emit.op(OpCode.RETURN);
+    }
+}
 fn forStatement() void {
     beginScope();
     // > For loop initializer
@@ -506,6 +541,10 @@ fn statement() void {
             advance();
             ifStatement();
         },
+        TokenType.Return => {
+            advance();
+            returnStatement();
+        },
         TokenType.Switch => {
             advance();
             switchStatement();
@@ -523,8 +562,8 @@ fn statement() void {
         },
     }
 }
-/// Build a non-interned constant for a variable name and return its index in the chunk's constants table.
-/// index is u16
+/// Build an interned constant for a variable name and return its index in the chunk's constants table.
+/// index is u16 upcasted to a usize
 fn identifierConstant(token: *const Token, intern_table: *Table) usize {
     const obj_intern = (Object.newString(
         parser.vm,
@@ -591,14 +630,13 @@ fn identifiersEqual(a: *const Token, b: *const Token) bool {
 }
 fn parseVariable(errMessage: []const u8, intern_table: *Table) usize {
     consume(TokenType.Identifier, errMessage);
+    if (parser.panic_mode) return 0;
     declareLocalVariable(); // Entry point for local variable declaration
     if (cc.scopeDepth > 0) return 0; // Dummy index, var already handled by declareLocalVariable
-
-    //TODO: If error this still proceeds silently.. fix
     return identifierConstant(&parser.previous, intern_table);
 }
 fn varDeclaration() void {
-    const global: usize = parseVariable("Expect variable name.", &cc.stringTable);
+    const global: usize = parseVariable("Expect variable name.", cc.stringTable);
     if (global > std.math.maxInt(u16)) {
         Error("Cannot declare more than 65535 variables in a single function");
         return;
@@ -619,14 +657,77 @@ fn defineVariable(global: usize) void {
     }
     emitU16Op(OpCode.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
 }
+/// Function declaration
+fn funDeclaration() void {
+    const global: usize = parseVariable("Expect function name.", cc.stringTable);
+    if (global > std.math.maxInt(u16)) {
+        // TODO: Switch to error propagation
+        Error("Cannot declare more than 65535 functions in a single file");
+        return;
+    }
+    markInitialized();
+    defineFunction(FunctionType.Function);
+    defineVariable(global);
+}
+fn defineFunction(ty: FunctionType) void {
+    const enclosing_compiler = cc;
+
+    var local_compiler = Compiler.init(
+        parser.vm.allocator,
+        parser.vm,
+        ty,
+    ) catch @panic(HEAP_FAIL);
+    defer local_compiler.deinit();
+
+    cc = &local_compiler; // Set current compiler to the new function compiler
+
+    // The function's name was already interned by parseVariable. We look it up
+    // here to avoid calling newString again, which was causing a double-free.
+    // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
+    cc.function.name = if (ty == FunctionType.Function)
+        lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone()
+    else
+        null;
+
+    if (ty != .Script) {
+        cc.locals.items[0].name = parser.previous;
+    }
+
+    beginScope();
+    consume(TokenType.LeftParen, "Expect '(' after function name.");
+    if (!check(TokenType.RightParen)) {
+        var condition = true;
+        while (condition) : (condition = match(TokenType.Comma)) {
+            cc.function.arity += 1;
+            if (cc.function.arity > std.math.maxInt(u8)) {
+                ErrorAtCurrent("Function cannot have more than 255 parameters.");
+            }
+            const fp = parseVariable("Expect parameter name.", cc.stringTable);
+            defineVariable(fp);
+        }
+    }
+    consume(TokenType.RightParen, "Expect ')' after function parameters.");
+    consume(TokenType.LeftBrace, "Expect '{' before function body.");
+    block();
+
+    const func = endCompiler() catch @panic("Failed to compile function");
+
+    // Restore the enclosing compiler
+    cc = enclosing_compiler;
+    const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
+    emitConstant(Value{ .Obj = obj }) catch @panic("Failed to emit function constant bytecode");
+
+    lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
+}
 /// Emit bytecode for a declaration
 fn declaration() void {
-    if (match(TokenType.Var)) varDeclaration() else statement();
+    if (match(TokenType.Fun)) funDeclaration() else if (match(TokenType.Var)) varDeclaration() else statement();
     if (parser.panic_mode) synchronize();
 }
 /// Mark the last local variable as initialized.
-/// Declaring” is when the variable is added to the scope
+/// Declaring is when the variable is added to the scope
 fn markInitialized() void {
+    if (cc.scopeDepth == 0) return; // Functions in global scope such as the top level function
     if (cc.localCount() == 0) return; // No locals in the current scope
     cc.locals.items[cc.localCount() - 1].depth = cc.scopeDepth;
 }
@@ -659,7 +760,7 @@ fn makeConstant(value: Value) usize {
     return currentChunk().writeU16Constant(value) catch @panic("developer: propagate this error up");
 }
 inline fn currentChunk() *Chunk {
-    return cc.compilingChunk;
+    return &cc.function.chunk;
 }
 /// Report error at current token
 fn ErrorAtCurrent(msg: ?[]const u8) void {
@@ -702,70 +803,27 @@ fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     }
     try stderr.writeAll("\n");
 }
-pub fn compile(
-    compiler: *Compiler,
-    source: []const u8,
-    vm: *VM,
-    allocator: std.mem.Allocator,
-    opts: struct {
-        debug: bool,
-        debug_level: ?u8,
-        repl_mode: bool,
-    },
-) CompilationResult {
-    cc = compiler; // Set the global compiler instance
-    parser.allocator = allocator;
-    parser.vm = vm;
-    parser.scanner = Scanner.init(source);
-    if (opts.debug) {
-        // Allocate DebugInfo on the heap
-        const di_ptr = allocator.create(DebugInfo) catch {
-            @panic("Failed to allocate debug info");
-        };
-        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
-            allocator.destroy(di_ptr);
-            @panic("Failed to initialize debug info");
-        };
-        parser.debugInfo = di_ptr;
-    }
-    if (opts.debug_level) |lvl| debug_level = lvl;
-    parser.repl_mode = opts.repl_mode;
-    advance();
-    while (!match(TokenType.Eof)) {
-        declaration();
-    }
-    const retval: CompilationResult = .{
-        .success = !parser.had_error,
-        .debugInfo = parser.debugInfo,
-    };
-    endCompiler(allocator) catch |err| {
-        std.debug.print("[Compiler]: Failed to emit OP_RETURN: {s}\n", .{@errorName(err)});
-    };
-    return retval;
-}
-/// `allocator` is only used in debug mode
-inline fn endCompiler(allocator: std.mem.Allocator) !void {
-    if (debug_level > 0) currentChunk().disassemble(allocator, "code", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
-    try emitReturn();
-}
-inline fn emitReturn() !void {
-    try emitByte(@intFromEnum(OpCode.RETURN));
+
+inline fn emitReturn() void {
+    emit.op(OpCode.NIL);
+    emit.op(OpCode.RETURN);
 }
 
 const std = @import("std");
-const Chunk = @import("chunk.zig").Chunk;
-const OpCode = @import("opcode.zig").OpCode;
+const Chunk = lib.Chunk;
+const OpCode = lib.OpCode;
 const Token = @import("scanner.zig").Token;
 const TokenType = @import("scanner.zig").TokenType;
 const Scanner = @import("scanner.zig");
 const DebugInfo = @import("debug.zig").DebugInfo;
-const Value = @import("value.zig").Value;
-const Object = @import("object.zig").Object;
+const Value = lib.Value;
+const Object = lib.Object;
+const ObjFunction = lib.ObjFunction;
 const BYTECODE_FAIL = "fatal: failed to emit bytecode";
 const HEAP_FAIL = "fatal: failed to heap allocate";
-const CompilerError = @import("error.zig").CompilerError;
-const Table = @import("table.zig").Table;
-const VM = @import("vm.zig").VM;
+const CompilerError = lib.CompilerError;
+const Table = lib.Table;
+const VM = lib.VM;
 const lib = @import("root.zig");
 
 /// Lowest to highest precedence
@@ -801,7 +859,7 @@ fn getRule(tokenType: TokenType) *const ParseRule {
 
 const rules = [_]ParseRule{
     // TOKEN_LEFT_PAREN
-    ParseRule{ .prefix = grouping, .infix = null, .precedence = Precedence.None },
+    ParseRule{ .prefix = grouping, .infix = call, .precedence = Precedence.Call },
     // TOKEN_RIGHT_PAREN
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
     // TOKEN_LEFT_BRACE
@@ -892,23 +950,70 @@ const rules = [_]ParseRule{
     ParseRule{ .prefix = null, .infix = null, .precedence = Precedence.None },
 };
 
+pub fn compile(
+    compiler: *Compiler,
+    source: []const u8,
+    vm: *VM,
+    allocator: std.mem.Allocator,
+    opts: lib.CompilerOpts,
+) CompilationResult {
+    cc = compiler; // Set the global compiler instance
+    parser.allocator = allocator;
+    parser.vm = vm;
+    parser.scanner = Scanner.init(source);
+    if (opts.debug) {
+        // Allocate DebugInfo on the heap
+        const di_ptr = allocator.create(DebugInfo) catch {
+            @panic("Failed to allocate debug info");
+        };
+        di_ptr.* = DebugInfo.init(allocator, .{}) catch {
+            allocator.destroy(di_ptr);
+            @panic("Failed to initialize debug info");
+        };
+        parser.debugInfo = di_ptr;
+    }
+    debug_level = opts.debug_level;
+    parser.repl_mode = opts.repl_mode;
+    advance();
+    while (!match(TokenType.Eof)) {
+        declaration();
+    }
+    const function = endCompiler() catch |err| b: {
+        std.debug.print("[Compiler Error]: {s}\n", .{@errorName(err)});
+        break :b null;
+    };
+    return .{
+        .function = function,
+        .success = !parser.had_error,
+        .debugInfo = parser.debugInfo,
+    };
+}
+
+inline fn endCompiler() !*ObjFunction {
+    if (debug_level > 0 and !parser.had_error)
+        currentChunk().disassemble(parser.vm.allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
+    emitReturn();
+    return cc.function;
+}
+
 const CompilationResult = struct {
     success: bool,
     debugInfo: ?*DebugInfo,
+    function: ?*ObjFunction,
 };
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
 pub const Compiler = struct {
+    function: *ObjFunction,
+    type: FunctionType,
     locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
     scopeDepth: i32, // Same as clox
     /// Compiler constant Table
-    constantTable: Table,
+    constantTable: *Table,
     /// Compiler string table
-    stringTable: Table,
-    /// Current chunk being compiled
-    compilingChunk: *Chunk,
+    stringTable: *Table,
     /// Switch depth
     switchDepth: u8 = 0,
 
@@ -917,13 +1022,22 @@ pub const Compiler = struct {
     // but should be cleared up in the future. For now we just stick to the defaults...
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
-    pub fn init(allocator: std.mem.Allocator, chunk: *Chunk) @This() {
+    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
+        var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
+        // Claim slot 0 for vm usage
+        try locals.append(Local{ .depth = 0, .name = Token{
+            .tokenType = TokenType.Error,
+            .lexeme = "",
+            .error_msg = "VM Reserved Token",
+            .line = 0,
+        } });
         return .{
-            .locals = std.ArrayList(Local).initCapacity(allocator, 16) catch @panic("Failed to allocate locals array"),
+            .locals = locals,
             .scopeDepth = 0,
-            .stringTable = Table.init(allocator),
-            .constantTable = Table.initWithHashFn(allocator, .default),
-            .compilingChunk = chunk,
+            .stringTable = try Table.init(allocator),
+            .constantTable = try Table.initWithHashFn(allocator, .default),
+            .function = try lib.newFunction(vm, null, null),
+            .type = @"type",
         };
     }
     pub fn deinit(self: *@This()) void {
@@ -960,4 +1074,9 @@ pub const Compiler = struct {
 pub const Local = struct {
     name: Token,
     depth: i32,
+};
+
+const FunctionType = enum {
+    Function,
+    Script,
 };

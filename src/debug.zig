@@ -60,6 +60,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .JUMP => return jumpInstruction("OP_JUMP", .POSITIVE, chunk, byte_offset, src_info),
         .JUMP_IF_FALSE => return jumpInstruction("OP_JUMP_IF_FALSE", .POSITIVE, chunk, byte_offset, src_info),
         .LOOP => return jumpInstruction("OP_LOOP", .NEGATIVE, chunk, byte_offset, src_info),
+        .CALL => return byteInstruction("OP_CALL", chunk, byte_offset, src_info),
     }
 }
 
@@ -353,8 +354,9 @@ pub const DebugInfo = struct {
 };
 
 const std = @import("std");
-const Chunk = @import("chunk.zig").Chunk;
-const OpCode = @import("opcode.zig").OpCode;
+const lib = @import("root.zig");
+const Chunk = lib.Chunk;
+const OpCode = lib.OpCode;
 const dbg = std.debug.print;
 const EMPTY = "";
 const DEBUG_ALLOC_FAILED = "Debug Allocation Failed";

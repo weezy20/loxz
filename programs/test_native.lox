@@ -1,0 +1,13 @@
+// Test native functions
+print "Testing native clock() function:";
+print clock();
+
+print "Testing native sqrt() function:";
+print "sqrt(16) =";
+print sqrt(16);
+
+print "Testing native pow() function for 2^32";
+print pow(2,32);
+
+print "Testing native abs() function for -10";
+print abs(-10);

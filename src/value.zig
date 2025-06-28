@@ -22,6 +22,15 @@ pub const Value = union(enum) {
             .Obj => try writer.print("{s}", .{self.Obj}),
         }
     }
+    /// Check if the value is a function object and return it if so.
+    pub fn asFunction(value: *const Value) ?*lib.ObjFunction {
+        if (value.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Function) {
+                return obj.data.Function;
+            }
+        }
+        return null;
+    }
     pub fn asNumber(value: *const Value) ?f64 {
         return switch (value.*) {
             .Number => |num| num,
@@ -74,28 +83,14 @@ pub const Value = union(enum) {
             },
         };
     }
-    /// Compare value types not values. For values use `isEqual`.
-    pub fn isSameType(self: *const Value, other: *const Value) bool {
-        switch (.{ self.*, other.* }) {
-            // Both are numbers
-            .{ .Number, .Number } => return true,
-            // Both are strings
-            .{ .String, .String } => return true,
-            // Both are booleans
-            .{ .Bool, .Bool } => return true,
-            // Both are nil
-            .{ .Nil, .Nil } => return true,
-            // Both are objects
-            .{ .Obj, .Obj } => self.Obj.objType() == other.Obj.objType(),
-            else => return false,
-        }
-    }
+    /// Check if the value is an object and return it if so.
     pub fn isObject(self: *const Value) ?*Object {
         if (self.* == .Obj) {
             return self.Obj;
         }
         return null;
     }
+    /// Check if the value is an object and return it if it is a string object.
     pub fn asObjString(self: *const Value) ?*ObjString {
         if (self.isObject()) |obj| {
             if (std.meta.activeTag(obj.data) == .String) {
@@ -104,6 +99,27 @@ pub const Value = union(enum) {
         }
         return null;
     }
+
+    /// Check if the value is an ObjFunction
+    pub fn isFunction(self: *const Value) ?*lib.ObjFunction {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Function) {
+                return obj.data.Function;
+            }
+        }
+        return null;
+    }
+
+    /// Check if the value is an ObjNative
+    pub fn isNative(self: *const Value) ?*lib.ObjNative {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Native) {
+                return obj.data.Native;
+            }
+        }
+        return null;
+    }
+
     pub fn isFalsey(self: *const Value) bool {
         return switch (self.*) {
             .Nil => true,
@@ -120,7 +136,7 @@ pub const ValueArray = struct {
     count: usize,
     capacity: usize,
 
-    pub fn init() !ValueArray {
+    pub fn init() ValueArray {
         return ValueArray{
             .values = &[_]Value{},
             .count = 0,

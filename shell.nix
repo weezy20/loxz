@@ -7,8 +7,4 @@ pkgs.mkShell {
     pkgs.clang
     pkgs.pkg-config
   ];
-
-  shellHook = ''
-    export SHELL=/usr/bin/zsh
-  '';
 }

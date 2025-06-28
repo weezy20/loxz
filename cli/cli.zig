@@ -82,7 +82,10 @@ fn validate_file(file: []const u8) !void {
     file_exists.close();
 }
 
-pub fn repl(allocator: std.mem.Allocator, config: *Config) !void {
+pub fn repl(config: *Config) !void {
+    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
     const stdout = std.io.getStdOut().writer();
     const stdin = std.io.getStdIn().reader();
     try stdout.writeAll("\u{1F4BB} Welcome to the Loxz REPL! Write some Lox code [use \\\u{23CE} to continue lines]\n");
@@ -167,30 +170,11 @@ pub fn run_file(allocator: std.mem.Allocator, config: *Config) !void {
 }
 /// Compile source code into a chunk then load it into the VM and interpret it
 fn interpret(source: []const u8, config: *const Config, allocator: std.mem.Allocator, vm: *VM) !InterpretResult {
-    var chunk = lib.Chunk.init(&allocator);
-    defer chunk.deinit();
-    var compiler = lib.Compiler.init(allocator, &chunk);
-    const compile_result = lib.compile(&compiler, source, vm, allocator, .{
-        .debug = true, // Setup DebugInfo unconditionally
-        .debug_level = config.debug_level,
-        .repl_mode = config.repl_mode,
-    });
-    var compilerStringTable = compiler.stringTable;
-    defer {
-        if (compile_result.debugInfo) |d| {
-            d.deinit();
-            allocator.destroy(d);
-        }
-        compiler.deinit();
-    }
-    if (!compile_result.success) {
-        return .compile_error;
-    }
-    return lib.interpret(vm, &chunk, .{
+    _ = allocator;
+    return lib.interpret(vm, source, .{
         .stack_tracing = config.stack_tracing,
         .debug_level = config.debug_level,
-        .debugInfo = compile_result.debugInfo,
-        .init_string_table = if (compilerStringTable.count > 0) &compilerStringTable else null,
+        .repl_mode = config.repl_mode,
     });
 }
 
