@@ -305,8 +305,13 @@ pub const ObjNative = struct {
     function: NativeFn,
 };
 
-// Native function type - needs to be after Value import
-pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) Value;
+/// Native function result type - allows native functions to signal errors
+pub const NativeResult = union(enum) {
+    ok: Value,
+    runtime_error: []const u8, // Error message
+};
+
+pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) NativeResult;
 
 /// Create an ObjFunction with the vm allocator, if you want an Object wrapper use `Object.newFunction`.
 pub fn newFunction(

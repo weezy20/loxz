@@ -113,11 +113,17 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
 /// Set up native functions in the VM
 pub fn setupNatives(self: *VM) !void {
     try self.defineNative("clock", clockNative);
+    try self.defineNative("sqrt", sqrtNative);
+    try self.defineNative("abs", absNative);
+    try self.defineNative("pow", powNative);
 }
 
 /// Set up native functions in the VM with a specific string table
 pub fn setupNativesWithStringTable(self: *VM, string_table: *Table) !void {
     try self.defineNativeWithStringTable("clock", clockNative, string_table);
+    try self.defineNativeWithStringTable("sqrt", sqrtNative, string_table);
+    try self.defineNativeWithStringTable("abs", absNative, string_table);
+    try self.defineNativeWithStringTable("pow", powNative, string_table);
 }
 
 pub fn deinitVM(self: *VM) void {
@@ -592,8 +598,17 @@ fn call(self: *VM, function: *ObjFunction, arg_count: u8) RuntimeError!void {
 fn callNative(self: *VM, native: *ObjNative, arg_count: u8) RuntimeError!void {
     const args = self.stackTop - arg_count;
     const result = native.function(arg_count, args);
-    self.stackTop -= arg_count + 1;
-    self.push(result);
+
+    switch (result) {
+        .ok => |value| {
+            self.stackTop -= arg_count + 1;
+            self.push(value);
+        },
+        .runtime_error => |error_msg| {
+            self.runtimeError("{s}", .{error_msg});
+            return RuntimeError.NativeFunctionError;
+        },
+    }
 }
 
 fn printValue(value: Value) void {
@@ -610,13 +625,64 @@ inline fn peek(self: *VM, distance: usize) Value {
     return (self.stackTop - 1 - distance)[0];
 }
 
-fn clockNative(arg_count: u8, args: [*]Value) Value {
+fn clockNative(arg_count: u8, args: [*]Value) lib.NativeResult {
     _ = arg_count; // clock() takes no arguments
     _ = args;
 
     // Get current time in seconds since epoch
     const timestamp = std.time.timestamp();
-    return Value{ .Number = @floatFromInt(timestamp) };
+    return lib.NativeResult{ .ok = Value{ .Number = @floatFromInt(timestamp) } };
+}
+
+fn sqrtNative(arg_count: u8, args: [*]Value) lib.NativeResult {
+    if (arg_count != 1) {
+        return lib.NativeResult{ .runtime_error = "sqrt() takes exactly 1 argument" };
+    }
+
+    const arg = args[0];
+    const num = arg.asNumber() orelse {
+        return lib.NativeResult{ .runtime_error = "sqrt() argument must be a number" };
+    };
+
+    if (num < 0.0) {
+        return lib.NativeResult{ .runtime_error = "sqrt() argument must be non-negative" };
+    }
+
+    const result = @sqrt(num);
+    return lib.NativeResult{ .ok = Value{ .Number = result } };
+}
+
+fn absNative(arg_count: u8, args: [*]Value) lib.NativeResult {
+    if (arg_count != 1) {
+        return lib.NativeResult{ .runtime_error = "abs() takes exactly 1 argument" };
+    }
+
+    const arg = args[0];
+    const num = arg.asNumber() orelse {
+        return lib.NativeResult{ .runtime_error = "abs() argument must be a number" };
+    };
+
+    const result = @abs(num);
+    return lib.NativeResult{ .ok = Value{ .Number = result } };
+}
+
+fn powNative(arg_count: u8, args: [*]Value) lib.NativeResult {
+    if (arg_count != 2) {
+        return lib.NativeResult{ .runtime_error = "pow() takes exactly 2 arguments" };
+    }
+
+    const base_arg = args[0];
+    const base = base_arg.asNumber() orelse {
+        return lib.NativeResult{ .runtime_error = "pow() base argument must be a number" };
+    };
+
+    const exponent_arg = args[1];
+    const exponent = exponent_arg.asNumber() orelse {
+        return lib.NativeResult{ .runtime_error = "pow() exponent argument must be a number" };
+    };
+
+    const result = std.math.pow(f64, base, exponent);
+    return lib.NativeResult{ .ok = Value{ .Number = result } };
 }
 
 const std = @import("std");

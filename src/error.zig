@@ -34,6 +34,7 @@ pub const RuntimeError = error{
     SwitchDepthExceeded,
     SwitchStackEmpty,
     InvalidCall,
+    NativeFunctionError,
 };
 pub fn formatRuntimeError(err: RuntimeError) []const u8 {
     return switch (err) {
@@ -50,6 +51,7 @@ pub fn formatRuntimeError(err: RuntimeError) []const u8 {
         RuntimeError.GlobalNotFound => "Undefined global variable",
         RuntimeError.SwitchDepthExceeded => "Nested switch depth maximum exceeded",
         RuntimeError.SwitchStackEmpty => "Switch stack is empty",
+        RuntimeError.NativeFunctionError => "Native function error",
         else => @tagName(err),
     };
 }
