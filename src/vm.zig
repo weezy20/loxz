@@ -170,10 +170,7 @@ fn printStack(self: *VM) void {
     std.debug.print(" ]\x1b[0m\n", .{});
 }
 
-fn push(self: *VM, value: Value) RuntimeError!void {
-    if (self.stackSize() >= STACK_MAX) {
-        return RuntimeError.StackOverflow;
-    }
+inline fn push(self: *VM, value: Value) void {
     self.stackTop[0] = value;
     self.stackTop += 1;
 }
@@ -223,10 +220,7 @@ pub fn defineNativeWithStringTable(self: *VM, name: []const u8, function: lib.Na
     _ = try self.globals.set(name_str.obj.data.String, Value{ .Obj = native_obj });
 }
 
-fn pop(self: *VM) RuntimeError!Value {
-    if (self.stackSize() == 0) {
-        return RuntimeError.StackUnderflow;
-    }
+inline fn pop(self: *VM) Value {
     self.stackTop -= 1;
     return self.stackTop[0];
 }
@@ -251,7 +245,7 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
     }
     const function = compile_result.function.?;
     const obj = self.addObjFunction(function) catch return .compile_error;
-    self.push(Value{ .Obj = obj }) catch |err| return .{ .runtime_error = err };
+    self.push(Value{ .Obj = obj });
     self.call(function, 0) catch |err| return .{ .runtime_error = err };
 
     lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
@@ -307,59 +301,59 @@ inline fn currentChunk(self: *VM) *Chunk {
 }
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
-    var frame = self.currentFrame();
-    var debug_offset: usize = frame.ip - frame.function.chunk.code;
-    var global_count: usize = 0;
-    var string_count: usize = 0;
-    while (debug_offset < frame.function.chunk.count) {
+    var frame = &self.frames[self.frameCount - 1];
+    var ip = frame.ip;
+
+    while (true) {
         if (stack_tracing) self.printStack();
+
+        // Only do debug work if debugging is enabled
         if (global_debug_level > 0) {
+            const debug_offset = @intFromPtr(ip) - @intFromPtr(frame.function.chunk.code);
             if (self.debugInfo) |d| blk: {
                 if (debug_offset >= frame.function.chunk.count) break :blk;
-                debug_offset = lib.disassembleInstruction(
+                _ = lib.disassembleInstruction(
                     &frame.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = d, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             } else {
-                debug_offset = lib.disassembleInstruction(
+                _ = lib.disassembleInstruction(
                     &frame.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = null, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             }
-            if (global_debug_level >= 2) {
-                if (self.stringTable.count != string_count) {
-                    string_count = self.stringTable.count;
-                    self.stringTable.printTable("string intern");
-                }
-                if (self.globals.count != global_count) {
-                    global_count = self.globals.count;
-                    self.globals.printTable("globals");
-                }
-            }
         }
-        const instruction = @as(OpCode, @enumFromInt(self.readByte()));
+
+        const instruction = @as(OpCode, @enumFromInt(ip[0]));
+        ip += 1;
         switch (instruction) {
             .RETURN => {
-                const ret_val = try self.pop();
+                const ret_val = self.pop();
                 self.frameCount -= 1;
                 if (self.frameCount == 0) {
-                    _ = try self.pop();
+                    _ = self.pop();
                     return;
                 }
                 self.stackTop = frame.slots;
-                try self.push(ret_val);
-                frame = self.currentFrame();
+                self.push(ret_val);
+                frame = &self.frames[self.frameCount - 1];
+                ip = frame.ip;
             },
-            .CONSTANT, .CONSTANT_LONG => {
-                const constant_index = self.readConstant(instruction == OpCode.CONSTANT_LONG);
-                const constant_value = self.currentChunk().constants.get(constant_index) catch |err| {
-                    return err;
-                };
-                try self.push(constant_value);
+            .CONSTANT => {
+                const constant_index = ip[0];
+                ip += 1;
+                const constant_value = frame.function.chunk.constants.values[constant_index];
+                self.push(constant_value);
+            },
+            .CONSTANT_LONG => {
+                const constant_index = (@as(usize, ip[0]) << 16) | (@as(usize, ip[1]) << 8) | @as(usize, ip[2]);
+                ip += 3;
+                const constant_value = frame.function.chunk.constants.values[constant_index];
+                self.push(constant_value);
             },
             .NEGATE => {
                 const value: [*]Value = self.stackTop - 1; // Autoscales ptr arithmetic based on @sizeOf(T) for [*]T
@@ -371,59 +365,58 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             },
             .ADD => add: {
                 if (self.peek(0).isString()) |rhstr| if (self.peek(1).isString()) |lhstr| {
-                    _ = try self.pop();
-                    _ = try self.pop();
+                    _ = self.pop();
+                    _ = self.pop();
                     const o = try Object.newString(
                         self,
                         &[_][]const u8{ lhstr, rhstr },
                         self.stringTable,
                     );
-                    try self.push(Value{ .Obj = o.obj });
+                    self.push(Value{ .Obj = o.obj });
                     break :add;
                 };
                 if (self.peek(0).asNumber()) |rhs| if (self.peek(1).asNumber()) |lhs| {
-                    _ = try self.pop();
-                    _ = try self.pop();
-                    try self.pushNumber(add(lhs, rhs));
+                    _ = self.pop();
+                    _ = self.pop();
+                    self.push(Value{ .Number = lhs + rhs });
                     break :add;
                 };
                 return RuntimeError.CannotAddDifferentTypes;
             },
             .SUBTRACT => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
-                try self.pushNumber(sub(lhs, rhs));
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                self.push(Value{ .Number = lhs - rhs });
             },
             .MULTIPLY => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
-                try self.pushNumber(mul(lhs, rhs));
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                self.push(Value{ .Number = lhs * rhs });
             },
             .DIVIDE => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
                 if (rhs == 0.0) {
                     return RuntimeError.DivisionByZero;
                 }
-                try self.pushNumber(div(lhs, rhs));
+                self.push(Value{ .Number = lhs / rhs });
             },
             .MOD => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
                 if (rhs == 0.0) {
                     return RuntimeError.DivisionByZero;
                 }
-                // Modulo operation
-                try self.pushNumber(@mod(lhs, rhs));
+                self.push(Value{ .Number = @mod(lhs, rhs) });
             },
             .TRUE => {
-                try self.push(Value{ .Bool = true });
+                self.push(Value{ .Bool = true });
             },
             .FALSE => {
-                try self.push(Value{ .Bool = false });
+                self.push(Value{ .Bool = false });
             },
             .NIL => {
-                try self.push(Value.Nil);
+                self.push(Value.Nil);
             },
             .NOT => {
                 const val: Value = (self.stackTop - 1)[0];
@@ -434,42 +427,44 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 }
             },
             .EQUAL => {
-                const b, const a = .{ try self.pop(), try self.pop() };
-                try self.push(Value{ .Bool = a.isEqual(&b) });
+                const b, const a = .{ self.pop(), self.pop() };
+                self.push(Value{ .Bool = a.isEqual(&b) });
             },
             .GREATER => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
-                try self.push(Value{ .Bool = lhs > rhs });
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                self.push(Value{ .Bool = lhs > rhs });
             },
             .LESS => {
-                const rhs = try self.popNumber();
-                const lhs = try self.popNumber();
-                try self.push(Value{ .Bool = lhs < rhs });
+                const rhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                const lhs = self.pop().asNumber() orelse return RuntimeError.NaN;
+                self.push(Value{ .Bool = lhs < rhs });
             },
             .PRINT => {
-                printValue(try self.pop());
+                printValue(self.pop());
             },
             .POP => {
-                _ = try self.pop();
+                _ = self.pop();
             },
             .DEFINE_GLOBAL => {
-                const name_idx = self.readU16();
-                const name_val = try self.currentChunk().constants.get(name_idx);
+                const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                const name_val = frame.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
-                const val = try self.pop();
+                const val = self.pop();
                 self.globalCache.set(name, val, true);
             },
             .GET_GLOBAL => {
-                const name_idx = self.readU16();
-                const name_val = try self.currentChunk().constants.get(name_idx);
+                const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                const name_val = frame.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 if (self.globalCache.lookup(name)) |value| {
-                    try self.push(value);
+                    self.push(value);
                 } else {
                     if (self.globals.get(name)) |value| {
-                        try self.push(value);
+                        self.push(value);
                         self.globalCache.set(name, value, true);
                     } else {
                         // Call runtimeError with format string and args
@@ -480,8 +475,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 }
             },
             .SET_GLOBAL => {
-                const name_idx = self.readU16();
-                const name = (try self.currentChunk().constants.get(name_idx)).asObjString().?;
+                const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                const name = frame.function.chunk.constants.values[name_idx].asObjString().?;
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
                     // Call runtimeError with format string and args
@@ -491,55 +487,67 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 self.globalCache.set(name, self.peek(0), true);
             },
             .GET_LOCAL => {
-                const slot = self.readU16();
-                try self.push(frame.slots[slot]);
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                self.push(frame.slots[slot]);
             },
             .SET_LOCAL => {
-                const slot = self.readU16();
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
                 frame.slots[slot] = self.peek(0);
             },
             .JUMP => {
-                const offset = self.readU16();
-                frame.ip += offset;
+                const offset = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                ip += offset;
             },
             .JUMP_IF_FALSE => {
-                const offset = self.readU16();
+                const offset = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
                 if (self.peek(0).isFalsey()) {
-                    frame.ip += offset;
+                    ip += offset;
                 }
             },
             .LOOP => {
-                const offset = self.readU16();
-                frame.ip -= offset;
+                const offset = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                ip -= offset;
             },
             .SWITCH_VAL => {
-                const depth = self.readByte();
+                const depth = ip[0];
+                ip += 1;
                 if (depth >= MAX_SWITCH_DEPTH) {
                     self.runtimeError("Switch value with invalid depth 0x{x:0>2} (max: {d})", .{ depth, MAX_SWITCH_DEPTH });
                     return RuntimeError.SwitchDepthExceeded;
                 }
                 if (depth == self.switchStack.len) {
-                    self.switchStack.append(try self.pop()) catch {};
-                } else self.switchStack.set(depth, try self.pop()); // Pops the switch value and store in vm.switchStack
+                    self.switchStack.append(self.pop()) catch {};
+                } else self.switchStack.set(depth, self.pop()); // Pops the switch value and store in vm.switchStack
             },
             .SWITCH_COMP => {
                 if (self.switchDepth() == 0) {
-                    self.runtimeError("Switch comparison without a switch value, [invalid depth: 0x{x:0>2}]", .{self.readByte()});
+                    const depth_byte = ip[0];
+                    ip += 1;
+                    self.runtimeError("Switch comparison without a switch value, [invalid depth: 0x{x:0>2}]", .{depth_byte});
                     return RuntimeError.SwitchStackEmpty;
                 }
-                const depth = self.readByte();
+                const depth = ip[0];
+                ip += 1;
                 if (depth >= MAX_SWITCH_DEPTH) {
                     self.runtimeError("Switch value with invalid depth 0x{x:0>2} (max: {d})", .{ depth, MAX_SWITCH_DEPTH });
                     return RuntimeError.SwitchDepthExceeded;
                 }
                 const switch_value: Value = self.switchStack.get(depth);
-                const case_value = try self.pop();
-                try self.push(Value{ .Bool = switch_value.isEqual(&case_value) });
+                const case_value = self.pop();
+                self.push(Value{ .Bool = switch_value.isEqual(&case_value) });
             },
             .CALL => {
-                const arg_count = self.readByte();
+                const arg_count = ip[0];
+                ip += 1;
+                frame.ip = ip; // Save current IP before function call
                 try self.callValue(self.peek(arg_count), arg_count);
-                frame = self.currentFrame();
+                frame = &self.frames[self.frameCount - 1];
+                ip = frame.ip;
             },
 
             // else => {
@@ -547,6 +555,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             //     return RuntimeError.UnknownOpCode;
             // },
         }
+
+        // Update frame.ip for debugging and error handling
+        frame.ip = ip;
     }
 }
 
@@ -582,7 +593,7 @@ fn callNative(self: *VM, native: *ObjNative, arg_count: u8) RuntimeError!void {
     const args = self.stackTop - arg_count;
     const result = native.function(arg_count, args);
     self.stackTop -= arg_count + 1;
-    try self.push(result);
+    self.push(result);
 }
 
 fn printValue(value: Value) void {
@@ -595,33 +606,8 @@ fn printValue(value: Value) void {
     }
 }
 
-fn peek(self: *VM, distance: usize) Value {
-    return self.stack[self.stackSize() - 1 - distance];
-}
-
-inline fn popNumber(self: *VM) RuntimeError!f64 {
-    const value = try self.pop();
-    if (value.asNumber()) |num| {
-        return num;
-    } else {
-        return RuntimeError.NaN;
-    }
-}
-inline fn pushNumber(self: *VM, value: f64) RuntimeError!void {
-    try self.push(Value{ .Number = value });
-}
-
-fn div(x: f64, y: f64) f64 {
-    return x / y;
-}
-fn mul(x: f64, y: f64) f64 {
-    return x * y;
-}
-fn add(x: f64, y: f64) f64 {
-    return x + y;
-}
-fn sub(x: f64, y: f64) f64 {
-    return x - y;
+inline fn peek(self: *VM, distance: usize) Value {
+    return (self.stackTop - 1 - distance)[0];
 }
 
 fn clockNative(arg_count: u8, args: [*]Value) Value {
