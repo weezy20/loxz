@@ -23,10 +23,10 @@ pub const Value = union(enum) {
         }
     }
     /// Check if the value is a function object and return it if so.
-    pub fn asFunction(value: *const Value) ?*Object {
+    pub fn asFunction(value: *const Value) ?*lib.ObjFunction {
         if (value.isObject()) |obj| {
             if (std.meta.activeTag(obj.data) == .Function) {
-                return obj;
+                return obj.data.Function;
             }
         }
         return null;
