@@ -110,6 +110,16 @@ pub const Value = union(enum) {
         return null;
     }
 
+    /// Check if the value is an ObjNative
+    pub fn isNative(self: *const Value) ?*lib.ObjNative {
+        if (self.isObject()) |obj| {
+            if (std.meta.activeTag(obj.data) == .Native) {
+                return obj.data.Native;
+            }
+        }
+        return null;
+    }
+
     pub fn isFalsey(self: *const Value) bool {
         return switch (self.*) {
             .Nil => true,

@@ -10,6 +10,7 @@ pub const Object = struct {
     const Data = union(enum) {
         String: *ObjString,
         Function: *ObjFunction,
+        Native: *ObjNative,
         // Class: *Class,
         // Instance: *Instance,
         // Array: *Array,
@@ -36,6 +37,13 @@ pub const Object = struct {
                             f.arity,
                             f.chunk,
                         });
+                    }
+                },
+                .Native => |n| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("<native fn>", .{});
+                    } else { // Debug mode: `{}`
+                        try writer.print("<ObjNative: [name: {s}]>", .{n.name.chars});
                     }
                 },
             }
@@ -152,6 +160,31 @@ pub const Object = struct {
         return .{ .obj = obj, .interned = interned };
     }
 
+    pub fn newNative(vm: *VM, name: *ObjString, function: NativeFn) !*Object {
+        const allocator = vm.allocator;
+
+        const obj_native = try allocator.create(ObjNative);
+        errdefer allocator.destroy(obj_native);
+
+        obj_native.* = .{
+            .name = name,
+            .function = function,
+        };
+
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Native = obj_native,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
+    }
+
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
@@ -172,6 +205,9 @@ pub const Object = struct {
             },
             .Function => |f| {
                 f.deinit(self.allocator);
+            },
+            .Native => |n| {
+                self.allocator.destroy(n);
             },
         }
         self.allocator.destroy(self);
@@ -194,6 +230,10 @@ pub const Object = struct {
             },
             .Function => {
                 @panic("Function equality not implemented yet");
+            },
+            .Native => |n1| {
+                const n2 = other.data.Native;
+                return n1.function == n2.function;
             },
             // else => return false,
         }
@@ -260,6 +300,14 @@ pub const ObjFunction = struct {
     }
 };
 
+pub const ObjNative = struct {
+    name: *ObjString,
+    function: NativeFn,
+};
+
+// Native function type - needs to be after Value import
+pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) Value;
+
 /// Create an ObjFunction with the vm allocator, if you want an Object wrapper use `Object.newFunction`.
 pub fn newFunction(
     vm: *VM,
@@ -282,3 +330,4 @@ const Table = @import("table.zig").Table;
 const tableFindString = @import("table.zig").tableFindString;
 const VM = @import("vm.zig").VM;
 const Chunk = @import("chunk.zig").Chunk;
+const Value = @import("value.zig").Value;

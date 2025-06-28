@@ -109,6 +109,17 @@ pub fn initVM(allocator: std.mem.Allocator) VM {
         .frameCount = 0,
     };
 }
+
+/// Set up native functions in the VM
+pub fn setupNatives(self: *VM) !void {
+    try self.defineNative("clock", clockNative);
+}
+
+/// Set up native functions in the VM with a specific string table
+pub fn setupNativesWithStringTable(self: *VM, string_table: *Table) !void {
+    try self.defineNativeWithStringTable("clock", clockNative, string_table);
+}
+
 pub fn deinitVM(self: *VM) void {
     if (global_debug_level >= 2)
         std.debug.print("Running destructor on VM\n", .{});
@@ -188,6 +199,30 @@ pub fn addObjFunction(self: *VM, function: *ObjFunction) !*Object {
     return obj_wrapper;
 }
 
+/// Define a native function in the global scope
+pub fn defineNative(self: *VM, name: []const u8, function: lib.NativeFn) !void {
+    // Create the string for the native function name
+    const name_str = try Object.newString(self, &[_][]const u8{name}, self.stringTable);
+
+    // Create the native object
+    const native_obj = try Object.newNative(self, name_str.obj.data.String, function);
+
+    // Add to globals
+    _ = try self.globals.set(name_str.obj.data.String, Value{ .Obj = native_obj });
+}
+
+/// Define a native function in the global scope with a specific string table
+pub fn defineNativeWithStringTable(self: *VM, name: []const u8, function: lib.NativeFn, string_table: *Table) !void {
+    // Create the string for the native function name using the provided string table
+    const name_str = try Object.newString(self, &[_][]const u8{name}, string_table);
+
+    // Create the native object
+    const native_obj = try Object.newNative(self, name_str.obj.data.String, function);
+
+    // Add to globals
+    _ = try self.globals.set(name_str.obj.data.String, Value{ .Obj = native_obj });
+}
+
 fn pop(self: *VM) RuntimeError!Value {
     if (self.stackSize() == 0) {
         return RuntimeError.StackUnderflow;
@@ -202,6 +237,13 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         std.debug.print("Compiler init error : {s}", .{@errorName(err)});
         return .compile_error;
     };
+
+    // Set up native functions after compiler is created but before compilation
+    self.setupNativesWithStringTable(compiler.stringTable) catch |err| {
+        std.debug.print("Error setting up natives: {s}\n", .{@errorName(err)});
+        return .compile_error;
+    };
+
     const compilerStringTable = compiler.stringTable;
     const compile_result = lib.compile(&compiler, source, self, self.allocator, opts.intoCompilerOpts());
     if (!compile_result.success) {
@@ -512,6 +554,9 @@ fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
     if (callee.isFunction()) |function| {
         return self.call(function, arg_count);
     }
+    if (callee.isNative()) |native| {
+        return self.callNative(native, arg_count);
+    }
     self.runtimeError("Can only call functions and classes.", .{});
     return RuntimeError.InvalidCall;
 }
@@ -530,6 +575,14 @@ fn call(self: *VM, function: *ObjFunction, arg_count: u8) RuntimeError!void {
     frame.function = function;
     frame.ip = function.chunk.code;
     frame.slots = self.stackTop - arg_count - 1;
+}
+
+/// Call a native function
+fn callNative(self: *VM, native: *ObjNative, arg_count: u8) RuntimeError!void {
+    const args = self.stackTop - arg_count;
+    const result = native.function(arg_count, args);
+    self.stackTop -= arg_count + 1;
+    try self.push(result);
 }
 
 fn printValue(value: Value) void {
@@ -571,6 +624,15 @@ fn sub(x: f64, y: f64) f64 {
     return x - y;
 }
 
+fn clockNative(arg_count: u8, args: [*]Value) Value {
+    _ = arg_count; // clock() takes no arguments
+    _ = args;
+
+    // Get current time in seconds since epoch
+    const timestamp = std.time.timestamp();
+    return Value{ .Number = @floatFromInt(timestamp) };
+}
+
 const std = @import("std");
 const lib = @import("root.zig");
 const Chunk = lib.Chunk;
@@ -582,6 +644,7 @@ const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
 const ObjString = lib.ObjString;
 const ObjFunction = lib.ObjFunction;
+const ObjNative = lib.ObjNative;
 const Table = lib.Table;
 
 fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {

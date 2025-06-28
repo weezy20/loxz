@@ -1,0 +1,8 @@
+// Test native functions
+print "Testing native clock() function:";
+var start = clock();
+print start;
+
+// Test that it's actually a function
+print "Type of clock:";
+print clock;
