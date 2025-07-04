@@ -329,6 +329,33 @@ pub fn newFunction(
     return obj_func;
 }
 
+pub const ObjClosure = struct {
+    function: *ObjFunction,
+};
+
+pub fn newObjClosure(vm: *VM, function: *ObjFunction) !*Object {
+    // Create the closure object
+    const obj_closure = try vm.allocator.create(ObjClosure);
+    errdefer vm.allocator.destroy(obj_closure);
+    obj_closure.* = ObjClosure{
+        .function = function,
+    };
+
+    // Create the Object wrapper
+    const obj = try vm.allocator.create(Object);
+    errdefer vm.allocator.destroy(obj);
+
+    obj.* = .{
+        .allocator = vm.allocator,
+        .data = .{
+            .Function = obj_closure,
+        },
+    };
+
+    vm.addObj(obj);
+    return obj;
+}
+
 // const hasher = @import("table.zig").loxHash;
 const hasher = @import("common.zig").hasher;
 const Table = @import("table.zig").Table;
