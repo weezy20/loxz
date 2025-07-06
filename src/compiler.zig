@@ -684,10 +684,19 @@ fn defineFunction(ty: FunctionType) void {
     // The function's name was already interned by parseVariable. We look it up
     // here to avoid calling newString again, which was causing a double-free.
     // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
-    cc.function.name = if (ty == FunctionType.Function)
-        lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone()
-    else
-        null;
+    cc.function.name = if (ty == FunctionType.Function) blk: {
+        if (lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme)) |found_name| {
+            break :blk found_name.clone();
+        } else {
+            // If not found in enclosing string table, create it
+            const obj_intern = Object.newString(
+                parser.vm,
+                &[_][]const u8{parser.previous.lexeme},
+                enclosing_compiler.stringTable,
+            ) catch @panic(HEAP_FAIL);
+            break :blk obj_intern.obj.data.String.clone();
+        }
+    } else null;
 
     if (ty != .Script) {
         cc.locals.items[0].name = parser.previous;

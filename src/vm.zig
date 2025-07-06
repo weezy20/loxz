@@ -704,7 +704,9 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
         // Calculate current instruction offset
         // self.ip points to the NEXT instruction, so subtract 1 for the current opcode
         // If the error is due to an operand, this might need adjustment or more info from the caller.
-        const offset = @intFromPtr(self.currentFrame().ip) - @intFromPtr(self.currentChunk().code) - 1;
+        const ip_addr = @intFromPtr(self.currentFrame().ip);
+        const code_addr = @intFromPtr(self.currentChunk().code);
+        const offset = if (ip_addr > code_addr) ip_addr - code_addr - 1 else 0;
         const line = d.getLine(offset);
         // ANSI escape for yellow gold: \x1b[1;33m, reset: \x1b[0m
         if (line) |l| {
@@ -728,7 +730,9 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
     while (i >= 0) : (i -= 1) {
         const frame = &self.frames[i];
         const function = frame.function;
-        const instruction = frame.ip - function.chunk.code - 1;
+        const ip_addr = @intFromPtr(frame.ip);
+        const code_addr = @intFromPtr(function.chunk.code);
+        const instruction = if (ip_addr > code_addr) ip_addr - code_addr - 1 else 0;
 
         if (self.debugInfo) |d| {
             if (d.getLine(instruction)) |line| {

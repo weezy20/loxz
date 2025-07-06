@@ -11,6 +11,7 @@ pub const Object = struct {
         String: *ObjString,
         Function: *ObjFunction,
         Native: *ObjNative,
+        Closure: *ObjClosure,
         // Class: *Class,
         // Instance: *Instance,
         // Array: *Array,
@@ -44,6 +45,13 @@ pub const Object = struct {
                         try writer.print("<native fn>", .{});
                     } else { // Debug mode: `{}`
                         try writer.print("<ObjNative: [name: {s}]>", .{n.name.chars});
+                    }
+                },
+                .Closure => |c| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("<closure: {}>", .{c.function});
+                    } else { // Debug mode: `{}`
+                        try writer.print("<ObjClosure: [function: {}]>", .{c.function});
                     }
                 },
             }
@@ -209,6 +217,9 @@ pub const Object = struct {
             .Native => |n| {
                 self.allocator.destroy(n);
             },
+            .Closure => |c| {
+                self.allocator.destroy(c);
+            },
         }
         self.allocator.destroy(self);
     }
@@ -228,14 +239,14 @@ pub const Object = struct {
                 if (s1 == s2) return true; // Fast path for same string
                 return ObjString.eql(s1, s2);
             },
-            .Function => {
-                @panic("Function equality not implemented yet");
+            .Function, .Closure => {
+                return false;
             },
             .Native => |n1| {
                 const n2 = other.data.Native;
+                // Compare function pointers for equality
                 return n1.function == n2.function;
             },
-            // else => return false,
         }
     }
 };
