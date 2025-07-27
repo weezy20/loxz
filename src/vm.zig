@@ -251,7 +251,16 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
     }
     const function = compile_result.function.?;
 
-    // Create a closure for the main script
+    // TODO: We avoid the ObjFunction creation, ObjClosure creation, pop, push dance because we don't require it
+    // It only becomes relevant when a GC is in place.
+    //
+    // const obj = self.addObjFunction(function) catch return .compile_error;
+    // self.push(Value{ .Obj = obj });
+    // const closure_obj = Object.newClosure(self, function) catch return .compile_error;
+    // _ = self.pop();  // Remove function object
+    // self.push(Value{ .Obj = closure_obj });
+    // self.callClosure(closure_obj.asClosure().?, 0) catch |err| return .{ .runtime_error = err };
+
     const closure_obj = Object.newClosure(self, function) catch return .compile_error;
     const closure = closure_obj.asClosure().?;
     self.push(Value{ .Obj = closure_obj });
