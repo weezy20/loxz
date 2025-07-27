@@ -155,19 +155,24 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    if (cc.resolveLocal(&name)) |arg| {
-        if (canAssign and match(TokenType.Equal)) {
-            expression();
-            emitU16Op(OpCode.SET_LOCAL, arg) catch |err| {
-                ReportCompilerError(err, "local variable assignment");
-                return;
-            };
-        } else {
-            emitU16Op(OpCode.GET_LOCAL, arg) catch |err| {
-                ReportCompilerError(err, "local variable access");
-                return;
-            };
+    // Try local variable resolution first
+    if (cc.resolveLocal(&name)) |maybe_arg| {
+        if (maybe_arg) |arg| {
+            if (canAssign and match(TokenType.Equal)) {
+                expression();
+                emitU16Op(OpCode.SET_LOCAL, arg) catch |err| {
+                    ReportCompilerError(err, "local variable assignment");
+                    return;
+                };
+            } else {
+                emitU16Op(OpCode.GET_LOCAL, arg) catch |err| {
+                    ReportCompilerError(err, "local variable access");
+                    return;
+                };
+            }
+            return;
         }
+        // Fallthrough to Upvalue resolution i.e. local was not found
     } else |err| {
         // Handle specific compiler errors for local resolution
         switch (err) {
@@ -175,31 +180,38 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
                 Error("Cannot read local variable in its own initializer.");
                 return;
             },
-            CompilerError.LocalNotFound => {
-                // Fall through to global variable handling
-            },
-            else => {
-                ReportCompilerError(err, "local variable resolution");
-                return;
-            },
+            else => unreachable, // We don't return any other error from this function
         }
+    }
 
-        // Fetch the variable's index in the chunk constant pool
-        // Safe as the index returned is within u16 range
-        const uarg = identifierConstant(&name, intern_table);
-        if (canAssign and match(TokenType.Equal)) {
-            expression();
-            emitU16Op(OpCode.SET_GLOBAL, uarg) catch |global_err| {
-                ReportCompilerError(global_err, "global variable assignment");
-                return;
-            };
-        } else {
-            emitU16Op(OpCode.GET_GLOBAL, uarg) catch |global_err| {
-                ReportCompilerError(global_err, "global variable access");
-                return;
-            };
+    // Try upvalue resolution if local resolution didn't find anything
+    if (cc.resolveUpvalue(&name)) |maybe_arg| {
+        if (maybe_arg) |arg| {
+            _ = arg;
+            return; // Successfully handled as upvalue (TODO: implement upvalue handling)
         }
-        return;
+        // Fallthrough to Global lookup
+    } else |err| {
+        // Handle upvalue resolution errors separately
+        _ = err;
+        // ReportCompilerError(err, "upvalue resolution");
+        // return;
+    }
+
+    // Fetch the variable's index in the chunk constant pool
+    // Safe as the index returned is within u16 range
+    const uarg = identifierConstant(&name, intern_table);
+    if (canAssign and match(TokenType.Equal)) {
+        expression();
+        emitU16Op(OpCode.SET_GLOBAL, uarg) catch |global_err| {
+            ReportCompilerError(global_err, "global variable assignment");
+            return;
+        };
+    } else {
+        emitU16Op(OpCode.GET_GLOBAL, uarg) catch |global_err| {
+            ReportCompilerError(global_err, "global variable access");
+            return;
+        };
     }
 }
 /// Emit a string
@@ -1121,11 +1133,12 @@ pub const Compiler = struct {
     inline fn localCount(self: *const @This()) usize {
         return self.locals.items.len;
     }
-    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!u16 {
-        if (self.localCount() == 0) return CompilerError.LocalNotFound;
+    /// Looks at the current compiler locals for a match. Returns `CompilerError.SameInitializer` in case the same var is used for initializing
+    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!?u16 {
+        if (self.localCount() == 0) return null;
         var i: u16 = @intCast(self.localCount() - 1); // Safe: we never add more than MAX_LOCAL_COUNT locals
 
-        while (true) {
+        while (true) : (i -= 1) {
             const local = &self.locals.items[i];
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
@@ -1134,11 +1147,17 @@ pub const Compiler = struct {
                 }
                 return i;
             }
-
             if (i == 0) break;
-            i -= 1;
         }
-        return CompilerError.LocalNotFound;
+        return null;
+    }
+    /// Looks for a local variable declared in any of the surrounding functions.
+    /// If it finds one, it returns an “upvalue index” for that variable.
+    fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
+        //TODO: Impl body
+        _ = self;
+        _ = name;
+        return null;
     }
 };
 
