@@ -250,9 +250,13 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         return .compile_error;
     }
     const function = compile_result.function.?;
-    const obj = self.addObjFunction(function) catch return .compile_error;
-    self.push(Value{ .Obj = obj });
-    self.call(function, 0) catch |err| return .{ .runtime_error = err };
+
+    // Create a closure for the main script
+    const closure_obj = Object.newClosure(self, function) catch return .compile_error;
+    const closure = closure_obj.asClosure().?;
+    self.push(Value{ .Obj = closure_obj });
+
+    self.callClosure(closure, 0) catch |err| return .{ .runtime_error = err };
 
     lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
         std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
@@ -303,7 +307,7 @@ inline fn currentFrame(self: *VM) *CallFrame {
     return &self.frames[self.frameCount - 1];
 }
 inline fn currentChunk(self: *VM) *Chunk {
-    return &self.currentFrame().function.chunk;
+    return &self.currentFrame().closure.function.chunk;
 }
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
@@ -315,18 +319,18 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
 
         // Only do debug work if debugging is enabled
         if (global_debug_level > 0) {
-            const debug_offset = @intFromPtr(ip) - @intFromPtr(frame.function.chunk.code);
+            const debug_offset = @intFromPtr(ip) - @intFromPtr(frame.closure.function.chunk.code);
             if (self.debugInfo) |d| blk: {
-                if (debug_offset >= frame.function.chunk.count) break :blk;
+                if (debug_offset >= frame.closure.function.chunk.count) break :blk;
                 _ = lib.disassembleInstruction(
-                    &frame.function.chunk,
+                    &frame.closure.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = d, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             } else {
                 _ = lib.disassembleInstruction(
-                    &frame.function.chunk,
+                    &frame.closure.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = null, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
@@ -352,13 +356,13 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .CONSTANT => {
                 const constant_index = ip[0];
                 ip += 1;
-                const constant_value = frame.function.chunk.constants.values[constant_index];
+                const constant_value = frame.closure.function.chunk.constants.values[constant_index];
                 self.push(constant_value);
             },
             .CONSTANT_LONG => {
                 const constant_index = (@as(usize, ip[0]) << 16) | (@as(usize, ip[1]) << 8) | @as(usize, ip[2]);
                 ip += 3;
-                const constant_value = frame.function.chunk.constants.values[constant_index];
+                const constant_value = frame.closure.function.chunk.constants.values[constant_index];
                 self.push(constant_value);
             },
             .NEGATE => {
@@ -455,7 +459,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .DEFINE_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name_val = frame.function.chunk.constants.values[name_idx];
+                const name_val = frame.closure.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
                 const val = self.pop();
@@ -464,7 +468,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .GET_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name_val = frame.function.chunk.constants.values[name_idx];
+                const name_val = frame.closure.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 if (self.globalCache.lookup(name)) |value| {
                     self.push(value);
@@ -483,7 +487,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .SET_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name = frame.function.chunk.constants.values[name_idx].asObjString().?;
+                const name = frame.closure.function.chunk.constants.values[name_idx].asObjString().?;
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
                     // Call runtimeError with format string and args
@@ -559,7 +563,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 const constant_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
                 // Safe to unwrap: Compiler guarantee.
-                const function = frame.function.chunk.constants.values[constant_idx].asFunction().?;
+                const function = frame.closure.function.chunk.constants.values[constant_idx].asFunction().?;
                 const closure = Object.newClosure(self, function) catch |err| {
                     self.runtimeError("Failed to create closure: {s}", .{@errorName(err)});
                     return RuntimeError.InvalidCall;
@@ -607,7 +611,7 @@ fn call(self: *VM, closure: *ObjClosure, arg_count: u8) RuntimeError!void {
     }
     var frame = &self.frames[self.frameCount];
     self.frameCount += 1;
-    frame.function = closure.function;
+    frame.closure = closure;
     frame.ip = closure.function.chunk.code;
     frame.slots = self.stackTop - arg_count - 1;
 }
@@ -748,7 +752,7 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
     stderr.print("== Stack trace ==\n", .{}) catch {};
     while (i >= 0) : (i -= 1) {
         const frame = &self.frames[i];
-        const function = frame.function;
+        const function = frame.closure.function;
         const ip_addr = @intFromPtr(frame.ip);
         const code_addr = @intFromPtr(function.chunk.code);
         const instruction = if (ip_addr > code_addr) ip_addr - code_addr - 1 else 0;
