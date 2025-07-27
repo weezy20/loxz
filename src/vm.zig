@@ -555,6 +555,17 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 frame = &self.frames[self.frameCount - 1];
                 ip = frame.ip;
             },
+            .CLOSURE => {
+                const constant_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                // Safe to unwrap: Compiler guarantee.
+                const function = frame.function.chunk.constants.values[constant_idx].asFunction().?;
+                const closure = Object.newClosure(self, function) catch |err| {
+                    self.runtimeError("Failed to create closure: {s}", .{@errorName(err)});
+                    return RuntimeError.InvalidCall;
+                };
+                self.push(Value{ .Obj = closure });
+            },
 
             // else => {
             //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
