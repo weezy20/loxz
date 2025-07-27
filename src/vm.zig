@@ -31,7 +31,7 @@ frameCount: u8, // Ok because frames_max is 64
 
 /// An ongoing function call.
 const CallFrame = struct {
-    function: *ObjFunction,
+    closure: *ObjClosure,
     ip: [*]u8,
     slots: [*]Value,
 };
@@ -579,8 +579,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
 }
 
 fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
-    if (callee.isFunction()) |function| {
-        return self.call(function, arg_count);
+    // Since every ObjFunction is now treated as a ObjClosure
+    if (callee.isClosure()) |closure| {
+        return self.callClosure(closure, arg_count);
     }
     if (callee.isNative()) |native| {
         return self.callNative(native, arg_count);
@@ -588,20 +589,26 @@ fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
     self.runtimeError("Can only call functions and classes.", .{});
     return RuntimeError.InvalidCall;
 }
-/// Setup callframe
-fn call(self: *VM, function: *ObjFunction, arg_count: u8) RuntimeError!void {
-    if (function.arity != arg_count) {
-        self.runtimeError("Expected {d} arguments but got {d}", .{ function.arity, arg_count });
+
+/// Setup callframe for closure
+fn callClosure(self: *VM, closure: *ObjClosure, arg_count: u8) RuntimeError!void {
+    if (closure.function.arity != arg_count) {
+        self.runtimeError("Expected {d} arguments but got {d}", .{ closure.function.arity, arg_count });
         return RuntimeError.InvalidCall;
     }
+    return self.call(closure, arg_count);
+}
+
+/// Setup callframe
+fn call(self: *VM, closure: *ObjClosure, arg_count: u8) RuntimeError!void {
     if (self.frameCount == FRAMES_MAX) {
         self.runtimeError("Stack overflow", .{});
         return RuntimeError.InvalidCall;
     }
     var frame = &self.frames[self.frameCount];
     self.frameCount += 1;
-    frame.function = function;
-    frame.ip = function.chunk.code;
+    frame.function = closure.function;
+    frame.ip = closure.function.chunk.code;
     frame.slots = self.stackTop - arg_count - 1;
 }
 
@@ -707,6 +714,7 @@ const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
 const ObjString = lib.ObjString;
 const ObjFunction = lib.ObjFunction;
+const ObjClosure = lib.ObjClosure;
 const ObjNative = lib.ObjNative;
 const Table = lib.Table;
 
