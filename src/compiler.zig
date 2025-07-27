@@ -1047,7 +1047,7 @@ pub const Compiler = struct {
 
         // Create function object directly without Object wrapper
         // The Object wrapper will be created later in endCompiler -> addObjFunction
-        const function = try lib.newFunction(allocator, &vm.allocator, null, null);
+        const function = try lib.newFunction(vm.allocator, null, null);
 
         return .{
             .locals = locals,

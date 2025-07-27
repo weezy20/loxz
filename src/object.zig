@@ -12,9 +12,6 @@ pub const Object = struct {
         Function: *ObjFunction,
         Native: *ObjNative,
         Closure: *ObjClosure,
-        // Class: *Class,
-        // Instance: *Instance,
-        // Array: *Array,
 
         pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
             _ = options;
@@ -358,16 +355,17 @@ pub const ObjFunction = struct {
 };
 
 /// Create a new ObjFunction without Object wrapper - used by compiler
-pub fn newFunction(allocator: Allocator, vm_allocator: *const Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
+/// The allocator should be the same one used to deinit this objfunction which means it accepts the VM.allocator
+pub fn newFunction(allocator: Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
     const function = try allocator.create(ObjFunction);
     errdefer allocator.destroy(function);
-    
+
     function.* = .{
         .name = if (name) |n| n.clone() else null,
         .arity = arity orelse 0,
-        .chunk = Chunk.init(vm_allocator),
+        .chunk = Chunk.init(allocator),
     };
-    
+
     return function;
 }
 
