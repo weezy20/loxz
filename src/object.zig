@@ -359,7 +359,7 @@ pub fn newObjClosure(vm: *VM, function: *ObjFunction) !*Object {
     obj.* = .{
         .allocator = vm.allocator,
         .data = .{
-            .Function = obj_closure,
+            .Closure = obj_closure,
         },
     };
 
