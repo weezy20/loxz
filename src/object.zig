@@ -344,6 +344,7 @@ pub const ObjClosure = struct {
     function: *ObjFunction,
 };
 
+/// Create a new ObjClosure object with the given function.
 pub fn newObjClosure(vm: *VM, function: *ObjFunction) !*Object {
     // Create the closure object
     const obj_closure = try vm.allocator.create(ObjClosure);
@@ -354,7 +355,6 @@ pub fn newObjClosure(vm: *VM, function: *ObjFunction) !*Object {
 
     // Create the Object wrapper
     const obj = try vm.allocator.create(Object);
-    errdefer vm.allocator.destroy(obj);
 
     obj.* = .{
         .allocator = vm.allocator,
