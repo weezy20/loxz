@@ -724,7 +724,9 @@ fn defineFunction(ty: FunctionType) void {
     // Restore the enclosing compiler
     cc = enclosing_compiler;
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
-    emitConstant(Value{ .Obj = obj }) catch @panic("Failed to emit function constant bytecode");
+    // The original clox implementation treats all objFunctions as objClosures so we will follow it
+    // But this can and should be optimized away.
+    emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
 
     lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }

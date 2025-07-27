@@ -132,7 +132,7 @@ pub const Chunk = struct {
                     @as(usize, self.code[offset + 2]) << 8 |
                     @as(usize, self.code[offset + 3]);
             },
-            .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL, .SET_LOCAL, .GET_LOCAL => {
+            .DEFINE_GLOBAL, .GET_GLOBAL, .SET_GLOBAL, .SET_LOCAL, .GET_LOCAL, .CLOSURE => {
                 // Interpret the next 16 bytes as a usize (big-endian)
                 var usize_idx: usize = 0x00;
                 inline for (0..2) |i| {
@@ -235,4 +235,6 @@ pub const OpCode = enum(u8) {
     SWITCH_VAL,
     SWITCH_COMP,
     CALL,
+    // Function calls
+    CLOSURE,
 };

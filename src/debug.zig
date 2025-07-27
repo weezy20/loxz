@@ -61,6 +61,7 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .JUMP_IF_FALSE => return jumpInstruction("OP_JUMP_IF_FALSE", .POSITIVE, chunk, byte_offset, src_info),
         .LOOP => return jumpInstruction("OP_LOOP", .NEGATIVE, chunk, byte_offset, src_info),
         .CALL => return byteInstruction("OP_CALL", chunk, byte_offset, src_info),
+        .CLOSURE => return constantU16Instruction("OP_CLOSURE", chunk, byte_offset, src_info),
     }
 }
 
