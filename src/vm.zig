@@ -233,7 +233,7 @@ inline fn pop(self: *VM) Value {
 
 pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) InterpretResult {
     global_debug_level = opts.debug_level;
-    var compiler = lib.Compiler.init(self.allocator, self, .Script) catch |err| {
+    var compiler = lib.Compiler.init(self.allocator, self, .Script, null) catch |err| {
         std.debug.print("Compiler init error : {s}", .{@errorName(err)});
         return .compile_error;
     };

@@ -234,7 +234,10 @@ pub const OpCode = enum(u8) {
     LOOP,
     SWITCH_VAL,
     SWITCH_COMP,
-    CALL,
     // Function calls
+    CALL,
     CLOSURE,
+    // Upvalues
+    SET_UPVALUE,
+    GET_UPVALUE,
 };

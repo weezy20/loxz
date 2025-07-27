@@ -187,8 +187,19 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
     // Try upvalue resolution if local resolution didn't find anything
     if (cc.resolveUpvalue(&name)) |maybe_arg| {
         if (maybe_arg) |arg| {
-            _ = arg;
-            return; // Successfully handled as upvalue (TODO: implement upvalue handling)
+            if (canAssign and match(TokenType.Equal)) {
+                expression();
+                emitU16Op(OpCode.SET_UPVALUE, arg) catch |err| {
+                    ReportCompilerError(err, "local variable assignment");
+                    return;
+                };
+            } else {
+                emitU16Op(OpCode.GET_UPVALUE, arg) catch |err| {
+                    ReportCompilerError(err, "local variable access");
+                    return;
+                };
+            }
+            return;
         }
         // Fallthrough to Global lookup
     } else |err| {
@@ -708,12 +719,11 @@ fn funDeclaration() void {
     defineVariable(global);
 }
 fn defineFunction(ty: FunctionType) !void {
-    const enclosing_compiler = cc;
-
     var local_compiler = Compiler.init(
         parser.vm.allocator,
         parser.vm,
         ty,
+        cc,
     ) catch @panic(HEAP_FAIL);
     defer local_compiler.deinit();
 
@@ -723,14 +733,14 @@ fn defineFunction(ty: FunctionType) !void {
     // here to avoid calling newString again, which was causing a double-free.
     // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
     cc.function.name = if (ty == FunctionType.Function) blk: {
-        if (lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme)) |found_name| {
+        if (lib.tableFindString(cc.enclosing_compiler.?.stringTable, parser.previous.lexeme)) |found_name| {
             break :blk found_name.clone();
         } else {
             // If not found in enclosing string table, create it
             const obj_intern = Object.newString(
                 parser.vm,
                 &[_][]const u8{parser.previous.lexeme},
-                enclosing_compiler.stringTable,
+                cc.enclosing_compiler.?.stringTable,
             ) catch @panic(HEAP_FAIL);
             break :blk obj_intern.obj.data.String.clone();
         }
@@ -760,13 +770,13 @@ fn defineFunction(ty: FunctionType) !void {
     const func = endCompiler() catch @panic("Failed to compile function");
 
     // Restore the enclosing compiler
-    cc = enclosing_compiler;
+    cc = cc.enclosing_compiler.?;
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
     // The original clox implementation treats all objFunctions as objClosures so we will follow it
     // But this can and should be optimized away.
     try emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
 
-    lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
+    lib.tableAddAll(local_compiler.stringTable, cc.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
@@ -1090,13 +1100,15 @@ pub const Compiler = struct {
     switchDepth: u8 = 0,
     /// Tracks if function ownership was transferred to VM
     function_transferred: bool = false,
+    /// Reference to the enclosing compiler
+    enclosing_compiler: ?*Compiler = null,
 
     // Use same hash across table/objstring,
     // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
     // but should be cleared up in the future. For now we just stick to the defaults...
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
-    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
+    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType, enclosing: ?*Compiler) !@This() {
         var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
         // Claim slot 0 for vm usage
         try locals.append(Local{ .depth = 0, .name = Token{
@@ -1117,6 +1129,7 @@ pub const Compiler = struct {
             .constantTable = try Table.initWithHashFn(allocator, .default),
             .function = function,
             .type = @"type",
+            .enclosing_compiler = enclosing,
         };
     }
     pub fn deinit(self: *@This()) void {
@@ -1154,8 +1167,7 @@ pub const Compiler = struct {
     /// Looks for a local variable declared in any of the surrounding functions.
     /// If it finds one, it returns an “upvalue index” for that variable.
     fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
-        //TODO: Impl body
-        _ = self;
+        if (self.enclosing_compiler == null) return null;
         _ = name;
         return null;
     }
