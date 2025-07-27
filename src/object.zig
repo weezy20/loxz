@@ -193,6 +193,31 @@ pub const Object = struct {
         return obj;
     }
 
+    /// Allocate a new ObjClosure using the VM's allocator and add it to the VM's object list.
+    pub fn newClosure(vm: *VM, function: *ObjFunction) !*Object {
+        const allocator = vm.allocator;
+
+        const obj_closure = try allocator.create(ObjClosure);
+        errdefer allocator.destroy(obj_closure);
+
+        obj_closure.* = .{
+            .function = function,
+        };
+
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Closure = obj_closure,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
+    }
+
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
@@ -206,6 +231,27 @@ pub const Object = struct {
             else => null,
         };
     }
+
+    pub fn asFunction(self: *const Object) ?*ObjFunction {
+        return switch (self.data) {
+            .Function => |f| f,
+            else => null,
+        };
+    }
+
+    pub fn asNative(self: *const Object) ?*ObjNative {
+        return switch (self.data) {
+            .Native => |n| n,
+            else => null,
+        };
+    }
+
+    pub fn asClosure(self: *const Object) ?*ObjClosure {
+        return switch (self.data) {
+            .Closure => |c| c,
+            else => null,
+        };
+    }
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
@@ -215,10 +261,10 @@ pub const Object = struct {
                 f.deinit(self.allocator);
             },
             .Native => |n| {
-                self.allocator.destroy(n);
+                n.deinit(self.allocator);
             },
             .Closure => |c| {
-                self.allocator.destroy(c);
+                c.deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -314,6 +360,12 @@ pub const ObjFunction = struct {
 pub const ObjNative = struct {
     name: *ObjString,
     function: NativeFn,
+
+    /// Deallocate the native object (currently just destroys the struct itself)
+    pub fn deinit(self: *ObjNative, allocator: Allocator) void {
+        // Note: We don't deinit the name since it's owned by the string intern table
+        allocator.destroy(self);
+    }
 };
 
 /// Native function result type - allows native functions to signal errors
@@ -324,48 +376,14 @@ pub const NativeResult = union(enum) {
 
 pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) NativeResult;
 
-/// Create an ObjFunction with the vm allocator, if you want an Object wrapper use `Object.newFunction`.
-pub fn newFunction(
-    vm: *VM,
-    name: ?*ObjString,
-    arity: ?u32,
-) !*ObjFunction {
-    // Create the function object
-    const obj_func = try vm.allocator.create(ObjFunction);
-    obj_func.* = ObjFunction{
-        .name = if (name) |n| n.clone() else null,
-        .arity = arity orelse 0,
-        .chunk = Chunk.init(&vm.allocator),
-    };
-    return obj_func;
-}
-
 pub const ObjClosure = struct {
     function: *ObjFunction,
+
+    /// Deallocate the closure object (doesn't destroy the underlying function)
+    pub fn deinit(self: *ObjClosure, allocator: Allocator) void {
+        allocator.destroy(self);
+    }
 };
-
-/// Create a new ObjClosure object with the given function.
-pub fn newObjClosure(vm: *VM, function: *ObjFunction) !*Object {
-    // Create the closure object
-    const obj_closure = try vm.allocator.create(ObjClosure);
-    errdefer vm.allocator.destroy(obj_closure);
-    obj_closure.* = ObjClosure{
-        .function = function,
-    };
-
-    // Create the Object wrapper
-    const obj = try vm.allocator.create(Object);
-
-    obj.* = .{
-        .allocator = vm.allocator,
-        .data = .{
-            .Closure = obj_closure,
-        },
-    };
-
-    vm.addObj(obj);
-    return obj;
-}
 
 // const hasher = @import("table.zig").loxHash;
 const hasher = @import("common.zig").hasher;

@@ -1040,12 +1040,16 @@ pub const Compiler = struct {
             .error_msg = "VM Reserved Token",
             .line = 0,
         } });
+
+        const function_obj = try Object.newFunction(vm, null, null);
+        const function = function_obj.asFunction().?;
+
         return .{
             .locals = locals,
             .scopeDepth = 0,
             .stringTable = try Table.init(allocator),
             .constantTable = try Table.initWithHashFn(allocator, .default),
-            .function = try lib.newFunction(vm, null, null),
+            .function = function,
             .type = @"type",
         };
     }
