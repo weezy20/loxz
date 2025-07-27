@@ -1002,6 +1002,8 @@ inline fn endCompiler() !*ObjFunction {
     if (debug_level > 0 and !parser.had_error)
         currentChunk().disassemble(parser.vm.allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
     emitReturn();
+    // Mark function as transferred - ownership will go to VM via addObjFunction
+    cc.function_transferred = true;
     return cc.function;
 }
 
@@ -1025,6 +1027,8 @@ pub const Compiler = struct {
     stringTable: *Table,
     /// Switch depth
     switchDepth: u8 = 0,
+    /// Tracks if function ownership was transferred to VM
+    function_transferred: bool = false,
 
     // Use same hash across table/objstring,
     // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
@@ -1041,8 +1045,9 @@ pub const Compiler = struct {
             .line = 0,
         } });
 
-        const function_obj = try Object.newFunction(vm, null, null);
-        const function = function_obj.asFunction().?;
+        // Create function object directly without Object wrapper
+        // The Object wrapper will be created later in endCompiler -> addObjFunction
+        const function = try lib.newFunction(allocator, &vm.allocator, null, null);
 
         return .{
             .locals = locals,
@@ -1057,6 +1062,10 @@ pub const Compiler = struct {
         self.stringTable.deinit();
         self.constantTable.deinit();
         self.locals.deinit();
+        // Free the function only if ownership wasn't transferred to VM
+        if (!self.function_transferred) {
+            self.function.deinit(self.function.chunk.allocator.*);
+        }
         self.* = undefined;
     }
     /// Number of locals in Compiler.locals as usize

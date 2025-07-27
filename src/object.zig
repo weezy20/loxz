@@ -357,6 +357,20 @@ pub const ObjFunction = struct {
     }
 };
 
+/// Create a new ObjFunction without Object wrapper - used by compiler
+pub fn newFunction(allocator: Allocator, vm_allocator: *const Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
+    const function = try allocator.create(ObjFunction);
+    errdefer allocator.destroy(function);
+    
+    function.* = .{
+        .name = if (name) |n| n.clone() else null,
+        .arity = arity orelse 0,
+        .chunk = Chunk.init(vm_allocator),
+    };
+    
+    return function;
+}
+
 pub const ObjNative = struct {
     name: *ObjString,
     function: NativeFn,
