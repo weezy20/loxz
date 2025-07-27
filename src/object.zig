@@ -356,7 +356,7 @@ pub const ObjFunction = struct {
 
 /// Create a new ObjFunction without Object wrapper - used by compiler
 /// The allocator should be the same one used to deinit this objfunction which means it accepts the VM.allocator
-pub fn newFunction(allocator: Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
+pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
     const function = try allocator.create(ObjFunction);
     errdefer allocator.destroy(function);
 

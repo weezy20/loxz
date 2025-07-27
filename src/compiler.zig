@@ -158,26 +158,46 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
     if (cc.resolveLocal(&name)) |arg| {
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitU16Op(OpCode.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.SET_LOCAL, arg) catch |err| {
+                ReportCompilerError(err, "local variable assignment");
+                return;
+            };
         } else {
-            emitU16Op(OpCode.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.GET_LOCAL, arg) catch |err| {
+                ReportCompilerError(err, "local variable access");
+                return;
+            };
         }
-    } else |_| {
-        // switch (err) {
-        //     // No action required as the two errors we generate are handled.
-        //     CompilerError.LocalNotFound => {},
-        //     CompilerError.SameInitializer => {}, // Will be reported by resolveLocal()
-        //     else => unreachable,
-        // }
+    } else |err| {
+        // Handle specific compiler errors for local resolution
+        switch (err) {
+            CompilerError.SameInitializer => {
+                Error("Cannot read local variable in its own initializer.");
+                return;
+            },
+            CompilerError.LocalNotFound => {
+                // Fall through to global variable handling
+            },
+            else => {
+                ReportCompilerError(err, "local variable resolution");
+                return;
+            },
+        }
 
         // Fetch the variable's index in the chunk constant pool
         // Safe as the index returned is within u16 range
         const uarg = identifierConstant(&name, intern_table);
         if (canAssign and match(TokenType.Equal)) {
             expression();
-            emitU16Op(OpCode.SET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.SET_GLOBAL, uarg) catch |global_err| {
+                ReportCompilerError(global_err, "global variable assignment");
+                return;
+            };
         } else {
-            emitU16Op(OpCode.GET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+            emitU16Op(OpCode.GET_GLOBAL, uarg) catch |global_err| {
+                ReportCompilerError(global_err, "global variable access");
+                return;
+            };
         }
         return;
     }
@@ -655,7 +675,10 @@ fn defineVariable(global: usize) void {
         markInitialized();
         return;
     }
-    emitU16Op(OpCode.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
+    emitU16Op(OpCode.DEFINE_GLOBAL, global) catch |err| {
+        ReportCompilerError(err, "global variable definition");
+        return;
+    };
 }
 /// Function declaration
 fn funDeclaration() void {
@@ -666,10 +689,13 @@ fn funDeclaration() void {
         return;
     }
     markInitialized();
-    defineFunction(FunctionType.Function);
+    defineFunction(FunctionType.Function) catch |err| {
+        ReportCompilerError(err, "function definition");
+        return;
+    };
     defineVariable(global);
 }
-fn defineFunction(ty: FunctionType) void {
+fn defineFunction(ty: FunctionType) !void {
     const enclosing_compiler = cc;
 
     var local_compiler = Compiler.init(
@@ -726,7 +752,7 @@ fn defineFunction(ty: FunctionType) void {
     const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
     // The original clox implementation treats all objFunctions as objClosures so we will follow it
     // But this can and should be optimized away.
-    emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
+    try emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
 
     lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
@@ -780,6 +806,27 @@ fn ErrorAtCurrent(msg: ?[]const u8) void {
 /// Report error at previous token
 fn Error(msg: ?[]const u8) void {
     errorAt(&parser.previous, msg, null) catch {};
+}
+
+/// Handle CompilerError unions and report appropriate error messages
+/// Sets parser to panic mode and reports the error to stderr
+fn ReportCompilerError(err: CompilerError, context: []const u8) void {
+    parser.panic_mode = true;
+    parser.had_error = true;
+
+    const error_msg = switch (err) {
+        CompilerError.OutOfMemory => "Out of memory",
+        CompilerError.NaN => "Not a number",
+        CompilerError.Unreachable => "Unreachable compiler state",
+        CompilerError.LocalNotFound => "Local variable not found",
+        CompilerError.SameInitializer => "Cannot declare a variable with its own initializer",
+    };
+
+    stderr.print("\x1b[31m[line {}] Compiler Error in {s}: {s}\x1b[0m\n", .{
+        parser.current.line,
+        context,
+        error_msg,
+    }) catch {};
 }
 fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     parser.had_error = true;
@@ -1049,7 +1096,7 @@ pub const Compiler = struct {
 
         // Create function object directly without Object wrapper
         // The Object wrapper will be created later in endCompiler -> addObjFunction
-        const function = try lib.newFunction(vm.allocator, null, null);
+        const function = try lib.newFunction(&vm.allocator, null, null);
 
         return .{
             .locals = locals,
