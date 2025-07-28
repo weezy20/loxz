@@ -124,6 +124,9 @@ else
             tar -xf "/tmp/${ZIG_TAR}" -C "$ZIG_DIR"
         fi
 
+        # Clean up temporary download file
+        rm -f "/tmp/${ZIG_TAR}"
+
         ZIG_BIN=$(find "${ZIG_DIR}" -type f -name zig -perm -111 | head -n 1)
 
         if [ ! -x "$ZIG_BIN" ]; then
