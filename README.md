@@ -28,11 +28,13 @@ Easiest way to build this is using the bash script `build.sh`, unless you alread
 Add execute permissions to the script and run it to obtain the `loxz` binary in your current working directory.
 ```sh
 ./build.sh
+# Use -f or --force to download exact .zigversion even if system zig is available
+./build.sh --force
 # Follow prompts
 # Run loxz
 ./loxz <OPTIONS> <file.lox>
 ```
- Inspect the script before running, but in a nutshell it downloads the `.zigversion` zig binary for your platform/OS and builds `loxz` using all optimizations.
+ Inspect the script before running, but in a nutshell it downloads the `.zigversion` zig binary for your platform/OS (If system zig is unavailable or `force` mode was used) and builds `loxz` using  `RelaseFast` optimization. The script will use your system zig if compatible with `.zigversion`, or warn you about version mismatches while proceeding anyway.
 
  If you're on Windows use `build.ps1` powershell script instead:
 
