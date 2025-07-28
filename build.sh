@@ -6,13 +6,76 @@ ZIG_VERSION_FILE=".zigversion"
 DEFAULT_ZIG_VERSION="0.14"
 ZIG_DIR=".zig-install"
 ZIG_BIN=""
+FORCE_MODE=false
+
+# Parse command line arguments
+for arg in "$@"; do
+    case $arg in
+        -f|--force)
+            FORCE_MODE=true
+            shift
+            ;;
+        *)
+            # Unknown option
+            ;;
+    esac
+done
+
+# Function to check if two version strings are compatible
+check_version_compatibility() {
+    local system_version="$1"
+    local expected_version="$2"
+    
+    # Extract major.minor from versions (ignore patch and build info)
+    local sys_major_minor=$(echo "$system_version" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+    local exp_major_minor=$(echo "$expected_version" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+    
+    if [ "$sys_major_minor" = "$exp_major_minor" ]; then
+        return 0  # Compatible
+    else
+        return 1  # Not compatible
+    fi
+}
 
 # Check for system zig
 if command -v zig >/dev/null 2>&1; then
     echo "[✔] Found system 'zig' at: $(command -v zig)"
-    ZIG_BIN=$(command -v zig)
-else
-    echo "[!] 'zig' binary not found in system PATH."
+    system_zig_bin=$(command -v zig)
+    
+    # Check version compatibility if .zigversion exists
+    if [ -f "$ZIG_VERSION_FILE" ]; then
+        expected_version=$(cat "$ZIG_VERSION_FILE")
+        system_version=$("$system_zig_bin" version 2>/dev/null || echo "unknown")
+        
+        if [ "$system_version" != "unknown" ]; then
+            if check_version_compatibility "$system_version" "$expected_version"; then
+                echo "[✔] System zig version ($system_version) is compatible with expected version ($expected_version)"
+                ZIG_BIN="$system_zig_bin"
+            else
+                if [ "$FORCE_MODE" = true ]; then
+                    echo "[!] WARNING: System zig version ($system_version) differs from .zigversion ($expected_version)"
+                    echo "[!] Force mode enabled (-f/--force), will download and use expected version instead"
+                    # Continue to download logic below
+                else
+                    echo "[!] WARNING: System zig version ($system_version) differs from .zigversion ($expected_version)"
+                    echo "[!] This may cause compatibility issues, but proceeding with system zig anyway"
+                    echo "[!] Use -f or --force to download and use the exact version from .zigversion"
+                    ZIG_BIN="$system_zig_bin"
+                fi
+            fi
+        else
+            echo "[!] WARNING: Could not determine system zig version, proceeding anyway"
+            ZIG_BIN="$system_zig_bin"
+        fi
+    else
+        # No .zigversion file, use system zig
+        ZIG_BIN="$system_zig_bin"
+    fi
+fi
+
+# If we don't have a zig binary yet (either no system zig or force mode with version mismatch)
+if [ -z "$ZIG_BIN" ]; then
+    echo "[!] Need to download zig binary."
 
     if [ -x "${ZIG_DIR}/zig" ] || [ -x "${ZIG_DIR}"/zig*/zig ]; then
         # Use existing zig from .zig-install
