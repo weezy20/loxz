@@ -34,6 +34,18 @@ Add execute permissions to the script and run it to obtain the `loxz` binary in 
 ```
  Inspect the script before running, but in a nutshell it downloads the `.zigversion` zig binary for your platform/OS and builds `loxz` using all optimizations.
 
+ If you're on Windows use `build.ps1` powershell script instead:
+
+ ```powershell
+ .\build.ps1
+
+# If you get Exection Policy errors you can bypass it:
+ powershell -ExecutionPolicy Bypass -File .\build.ps1
+
+ # To force download and install zig as .zigversion pass -Force
+.\build.ps1 -Force
+ ```
+
 ## Additional features in loxz over the standard implementation: 
 
 - Flexible constant pool upto 16_777_216 (u24) constants enabled by `OP_CONSTANT_LONG`. This instruction is emitted only after 8-bit space for constants have been exhausted.
