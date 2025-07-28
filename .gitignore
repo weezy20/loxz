@@ -4,3 +4,5 @@ zig-out
 clox
 dev.lox
 .zig-install
+loxz
+loxz.exe
