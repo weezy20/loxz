@@ -22,6 +22,18 @@ Flags:
 | `-t`, `--stack-tracing` | Enable VM stack tracing   |
 | `-d`, `--debug`   | Enable debug output, set debug level  |
 
+### Build
+
+Easiest way to build this is using the bash script `build.sh`, unless you already have zig installed.
+Add execute permissions to the script and run it to obtain the `loxz` binary in your current working directory.
+```sh
+./build.sh
+# Follow prompts
+# Run loxz
+./loxz <OPTIONS> <file.lox>
+```
+ Inspect the script before running, but in a nutshell it downloads the `.zigversion` zig binary for your platform/OS and builds `loxz` using all optimizations.
+
 ## Additional features in loxz over the standard implementation: 
 
 - Flexible constant pool upto 16_777_216 (u24) constants enabled by `OP_CONSTANT_LONG`. This instruction is emitted only after 8-bit space for constants have been exhausted.

@@ -3,3 +3,4 @@ zig-out
 .vscode/settings.json
 clox
 dev.lox
+.zig-install
