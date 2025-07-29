@@ -204,9 +204,8 @@ fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
         // Fallthrough to Global lookup
     } else |err| {
         // Handle upvalue resolution errors separately
-        _ = err;
-        // ReportCompilerError(err, "upvalue resolution");
-        // return;
+        ReportCompilerError(err, "upvalue resolution");
+        return;
     }
 
     // Fetch the variable's index in the chunk constant pool
@@ -842,6 +841,7 @@ fn ReportCompilerError(err: CompilerError, context: []const u8) void {
         CompilerError.Unreachable => "Unreachable compiler state",
         CompilerError.LocalNotFound => "Local variable not found",
         CompilerError.SameInitializer => "Cannot declare a variable with its own initializer",
+        CompilerError.TooManyUpvalues => "Exceed number of captured variables. Limit is 2^16",
     };
 
     stderr.print("\x1b[31m[line {}] Compiler Error in {s}: {s}\x1b[0m\n", .{
@@ -1089,6 +1089,9 @@ const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 pub const Compiler = struct {
     function: *ObjFunction,
     type: FunctionType,
+    /// Upvalues list
+    upvalues: std.ArrayList(Upvalue),
+    /// Locals list
     locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
     scopeDepth: i32, // Same as clox
@@ -1110,6 +1113,7 @@ pub const Compiler = struct {
 
     pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType, enclosing: ?*Compiler) !@This() {
         var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
+        const upvalues = try std.ArrayList(Upvalue).initCapacity(allocator, 8); // Start with small capacity
         // Claim slot 0 for vm usage
         try locals.append(Local{ .depth = 0, .name = Token{
             .tokenType = TokenType.Error,
@@ -1124,6 +1128,7 @@ pub const Compiler = struct {
 
         return .{
             .locals = locals,
+            .upvalues = upvalues,
             .scopeDepth = 0,
             .stringTable = try Table.init(allocator),
             .constantTable = try Table.initWithHashFn(allocator, .default),
@@ -1136,6 +1141,7 @@ pub const Compiler = struct {
         self.stringTable.deinit();
         self.constantTable.deinit();
         self.locals.deinit();
+        self.upvalues.deinit();
         // Free the function only if ownership wasn't transferred to VM
         if (!self.function_transferred) {
             self.function.deinit(self.function.chunk.allocator.*);
@@ -1164,13 +1170,46 @@ pub const Compiler = struct {
         }
         return null;
     }
+    fn addUpvalue(compiler: *Compiler, index: u16, isLocal: bool) CompilerError!u16 {
+        const upvalue_count = compiler.function.upvalue_count;
+
+        // Check if this upvalue already exists
+        for (compiler.upvalues.items[0..upvalue_count], 0..) |upvalue, i| {
+            if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                return @intCast(i);
+            }
+        }
+
+        // Add new upvalue
+        compiler.upvalues.append(Upvalue{
+            .index = index,
+            .isLocal = isLocal,
+        }) catch return CompilerError.OutOfMemory;
+
+        compiler.function.upvalue_count += 1;
+        if (compiler.function.upvalue_count > MAX_LOCAL_COUNT) {
+            return CompilerError.TooManyUpvalues;
+        }
+        return compiler.function.upvalue_count - 1;
+    }
     /// Looks for a local variable declared in any of the surrounding functions.
     /// If it finds one, it returns an “upvalue index” for that variable.
     fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
-        if (self.enclosing_compiler == null) return null;
-        _ = name;
+        if (self.enclosing_compiler == null) return null; // Global namespace
+        const uarg = resolveLocal(self.enclosing_compiler.?, name) catch {
+            // SameInitializer error would've already been handled at enclosing compiler so there's no need for any action here
+            return null;
+        };
+        if (uarg) |arg| {
+            return try addUpvalue(self, arg, true);
+        }
         return null;
     }
+};
+
+pub const Upvalue = struct {
+    index: u16,
+    isLocal: bool,
 };
 
 pub const Local = struct {

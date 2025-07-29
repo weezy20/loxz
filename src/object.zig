@@ -71,6 +71,7 @@ pub const Object = struct {
         obj_function.* = .{
             .name = if (name) |n| n.clone() else null,
             .arity = arity orelse 0,
+            .upvalue_count = 0,
             .chunk = Chunk.init(&vm.allocator),
         };
 
@@ -340,6 +341,7 @@ pub const ObjString = struct {
 pub const ObjFunction = struct {
     name: ?*ObjString = null,
     arity: u32,
+    upvalue_count: u16,
     chunk: Chunk,
 
     /// Create and return an undefined function object.
@@ -363,6 +365,7 @@ pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) 
     function.* = .{
         .name = if (name) |n| n.clone() else null,
         .arity = arity orelse 0,
+        .upvalue_count = 0,
         .chunk = Chunk.init(allocator),
     };
 
