@@ -57,6 +57,7 @@ pool have been exhausted.
 - String interning for strings are performed at comptime so zero cost runtime ObjString comparisons. They are only a pointer comparison. It's as fast as it gets.
 - Supports `%` modulo operation.
 - Add support for `switch/case`. Check out [switch-case.lox](programs/switch-case.lox) example. Supports upto 64 nested switch blocks. No `break` keyword required, only one switch case executes.
+- Hybrid approach used for storing Upvalues on stack (upto 16 upvalues) and switching to a dynamic list for the rest. This gives us the benefit of having upto 2^16 upvalues before you hit a compile error but with a lower upfront stack allocation of just 16 upvalues compared to 256 in the book.
 
 ## Native Functions
 
