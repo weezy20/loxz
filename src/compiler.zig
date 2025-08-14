@@ -1261,12 +1261,16 @@ pub const Compiler = struct {
         compiler.upvalues.append(Upvalue{
             .index = index,
             .isLocal = isLocal,
-        }) catch return CompilerError.OutOfMemory;
+        }) catch {
+            ReportCompilerError(CompilerError.OutOfMemory, "adding upvalue");
+            return CompilerError.OutOfMemory;
+        };
 
-        compiler.function.upvalue_count += 1;
-        if (compiler.function.upvalue_count > MAX_LOCAL_COUNT) {
+        const uvc = compiler.function.upvalue_count;
+        if (uvc == MAX_LOCAL_COUNT) {
             return CompilerError.TooManyUpvalues;
         }
+        compiler.function.upvalue_count += 1;
         return compiler.function.upvalue_count - 1;
     }
     /// Looks for a local variable declared in any of the surrounding functions.
@@ -1281,6 +1285,11 @@ pub const Compiler = struct {
         if (uarg) |arg| {
             return try addUpvalue(self, arg, true);
         }
+        const upvalue = try resolveUpvalue(self.enclosing_compiler.?, name);
+        if (upvalue) |v| {
+            return try addUpvalue(self, v, false);
+        }
+
         return null;
     }
 };
