@@ -1086,11 +1086,90 @@ const CompilationResult = struct {
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
+/// Hybrid upvalues storage: inline buffer for common case, dynamic list for >16 upvalues. 16 is an arbitrary choice here.
+pub const Upvalues = struct {
+    /// Small inline buffer for upto 16 upvalues
+    buffer: [16]Upvalue = undefined,
+    /// Fallback to dynamic list
+    overflow: ?std.ArrayList(Upvalue) = null,
+    /// Current count of upvalues
+    count: u16 = 0,
+    /// Allocator for overflow list
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) @This() {
+        return .{
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        if (self.overflow) |overflow| {
+            overflow.deinit();
+        }
+        self.* = undefined;
+    }
+
+    /// Append an upvalue
+    pub fn append(self: *@This(), upvalue: Upvalue) !void {
+        if (self.count < 16) {
+            // Use inline buffer
+            self.buffer[self.count] = upvalue;
+        } else {
+            // Use overflow list
+            if (self.overflow == null) {
+                self.overflow = std.ArrayList(Upvalue).initCapacity(self.allocator, 16);
+            }
+            try self.overflow.?.append(upvalue);
+        }
+        self.count += 1;
+    }
+
+    /// Find an upvalue by index and isLocal properties
+    /// Returns the upvalue index if found, null otherwise
+    pub fn findUpvalue(self: *const @This(), upvalue_count: u16, index: u16, isLocal: bool) ?u16 {
+        // For the common case (≤16 upvalues), use direct buffer access
+        if (upvalue_count <= 16) {
+            const upvalue_slice = self.buffer[0..upvalue_count];
+            for (upvalue_slice, 0..) |upvalue, i| {
+                if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                    return @intCast(i);
+                }
+            }
+        } else {
+            // For overflow case, check both buffer and overflow list
+            for (self.buffer, 0..) |upvalue, i| {
+                if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                    return @intCast(i);
+                }
+            }
+            if (self.overflow) |overflow| {
+                for (overflow.items, 0..) |upvalue, i| {
+                    if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                        return @intCast(16 + i); // Offset by buffer size
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /// Get an upvalue by index
+    pub fn get(self: *const @This(), idx: u16) Upvalue {
+        if (idx < 16) {
+            return self.buffer[idx];
+        } else {
+            const overflow_index = idx - 16;
+            return self.overflow.?.items[overflow_index];
+        }
+    }
+};
+
 pub const Compiler = struct {
     function: *ObjFunction,
     type: FunctionType,
     /// Upvalues list
-    upvalues: std.ArrayList(Upvalue),
+    upvalues: Upvalues,
     /// Locals list
     locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
@@ -1113,7 +1192,7 @@ pub const Compiler = struct {
 
     pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType, enclosing: ?*Compiler) !@This() {
         var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
-        const upvalues = try std.ArrayList(Upvalue).initCapacity(allocator, 8); // Start with small capacity
+        const upvalues = Upvalues.init(allocator);
         // Claim slot 0 for vm usage
         try locals.append(Local{ .depth = 0, .name = Token{
             .tokenType = TokenType.Error,
@@ -1173,11 +1252,9 @@ pub const Compiler = struct {
     fn addUpvalue(compiler: *Compiler, index: u16, isLocal: bool) CompilerError!u16 {
         const upvalue_count = compiler.function.upvalue_count;
 
-        // Check if this upvalue already exists
-        for (compiler.upvalues.items[0..upvalue_count], 0..) |upvalue, i| {
-            if (upvalue.index == index and upvalue.isLocal == isLocal) {
-                return @intCast(i);
-            }
+        // Check if this upvalue already exists using the Upvalues method
+        if (compiler.upvalues.findUpvalue(upvalue_count, index, isLocal)) |existing_index| {
+            return existing_index;
         }
 
         // Add new upvalue
@@ -1196,6 +1273,7 @@ pub const Compiler = struct {
     /// If it finds one, it returns an “upvalue index” for that variable.
     fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
         if (self.enclosing_compiler == null) return null; // Global namespace
+        // Try to resolve the identifier as a local variable in the enclosing compiler
         const uarg = resolveLocal(self.enclosing_compiler.?, name) catch {
             // SameInitializer error would've already been handled at enclosing compiler so there's no need for any action here
             return null;
