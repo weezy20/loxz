@@ -1118,7 +1118,7 @@ pub const Upvalues = struct {
         } else {
             // Use overflow list
             if (self.overflow == null) {
-                self.overflow = std.ArrayList(Upvalue).initCapacity(self.allocator, 16);
+                self.overflow = try std.ArrayList(Upvalue).initCapacity(self.allocator, 16);
             }
             try self.overflow.?.append(upvalue);
         }
