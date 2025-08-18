@@ -12,6 +12,7 @@ pub const Object = struct {
         Function: *ObjFunction,
         Native: *ObjNative,
         Closure: *ObjClosure,
+        Upvalue: *ObjUpvalue,
 
         pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
             _ = options;
@@ -49,6 +50,13 @@ pub const Object = struct {
                         try writer.print("<closure: {}>", .{c.function});
                     } else { // Debug mode: `{}`
                         try writer.print("<ObjClosure: [function: {}]>", .{c.function});
+                    }
+                },
+                .Upvalue => |u| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("<upvalue>", .{});
+                    } else { // Debug mode: `{}`
+                        try writer.print("<ObjUpvalue: [location: {}]>", .{u.location});
                     }
                 },
             }
@@ -216,6 +224,31 @@ pub const Object = struct {
         return obj;
     }
 
+    /// Allocate a new ObjUpvalue using the VM's allocator and add it to the VM's object list.
+    pub fn newUpvalue(vm: *VM, location: *Value) !*Object {
+        const allocator = vm.allocator;
+
+        const obj_upvalue = try allocator.create(ObjUpvalue);
+        errdefer allocator.destroy(obj_upvalue);
+
+        obj_upvalue.* = .{
+            .location = location,
+        };
+
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Upvalue = obj_upvalue,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
+    }
+
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
@@ -264,6 +297,9 @@ pub const Object = struct {
             .Closure => |c| {
                 c.deinit(self.allocator);
             },
+            .Upvalue => |u| {
+                u.deinit(self.allocator);
+            },
         }
         self.allocator.destroy(self);
     }
@@ -290,6 +326,10 @@ pub const Object = struct {
                 const n2 = other.data.Native;
                 // Compare function pointers for equality
                 return n1.function == n2.function;
+            },
+            .Upvalue => {
+                // Upvalues are compared by identity, not value
+                return false;
             },
         }
     }
@@ -396,6 +436,15 @@ pub const ObjClosure = struct {
 
     /// Deallocate the closure object (doesn't destroy the underlying function)
     pub fn deinit(self: *ObjClosure, allocator: Allocator) void {
+        allocator.destroy(self);
+    }
+};
+
+pub const ObjUpvalue = struct {
+    location: *Value,
+
+    /// Deallocate the upvalue object
+    pub fn deinit(self: *ObjUpvalue, allocator: Allocator) void {
         allocator.destroy(self);
     }
 };
