@@ -1,4 +1,11 @@
 var debug_level: u8 = 0;
+
+// Upvalue encoding constants for bit-packed upvalue indices
+// Uses MSB of isLocal byte to indicate whether upvalue index is 1-byte or 2-byte
+const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
+const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
+const BYTE_MAX_INDEX: usize = 255; // Threshold for switching to 2-byte encoding
+
 /// Compiler global singleton
 var cc: *Compiler = undefined;
 var parser: Parser = Parser{
@@ -718,12 +725,12 @@ fn funDeclaration() void {
     defineVariable(global);
 }
 fn defineFunction(ty: FunctionType) !void {
-    var local_compiler = Compiler.init(
+    var local_compiler = try Compiler.init(
         parser.vm.allocator,
         parser.vm,
         ty,
         cc,
-    ) catch @panic(HEAP_FAIL);
+    );
     defer local_compiler.deinit();
 
     cc = &local_compiler; // Set current compiler to the new function compiler
@@ -770,10 +777,35 @@ fn defineFunction(ty: FunctionType) !void {
 
     // Restore the enclosing compiler
     cc = cc.enclosing_compiler.?;
-    const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
+    const obj = try parser.vm.addObjFunction(func);
     // The original clox implementation treats all objFunctions as objClosures so we will follow it
     // But this can and should be optimized away.
     try emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
+
+    for (0..func.upvalue_count) |i| {
+        const upvalue = local_compiler.upvalues.get(i);
+        const upvalue_index = upvalue.index;
+
+        // Create packed byte with local flag and width indicator
+        var packed_byte: u8 = 0x00;
+        if (upvalue.isLocal) {
+            packed_byte |= UPVALUE_IS_LOCAL_FLAG;
+        }
+
+        // Use bit-packed encoding: 1 byte for indices <= 255, 2 bytes for larger indices
+        // The index is either the local slot index or the upvalue index to be captured
+        if (upvalue_index <= BYTE_MAX_INDEX) {
+            // Single byte encoding: MSB clear, remaining bits include local flag
+            emit.byte(packed_byte);
+            emit.byte(@intCast(upvalue_index));
+        } else {
+            // Two byte encoding: MSB set to indicate wide index, remaining bits include local flag
+            packed_byte |= UPVALUE_WIDE_INDEX_FLAG;
+            emit.byte(packed_byte);
+            emit.byte(@intCast((upvalue_index >> 8) & 0xff)); // MSB of index
+            emit.byte(@intCast(upvalue_index & 0xff)); // LSB of index
+        }
+    }
 
     lib.tableAddAll(local_compiler.stringTable, cc.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
@@ -831,18 +863,18 @@ fn Error(msg: ?[]const u8) void {
 
 /// Handle CompilerError unions and report appropriate error messages
 /// Sets parser to panic mode and reports the error to stderr
-fn ReportCompilerError(err: CompilerError, context: []const u8) void {
+fn ReportCompilerError(err: anyerror, context: []const u8) void {
     parser.panic_mode = true;
     parser.had_error = true;
 
-    const error_msg = switch (err) {
+    const error_msg = if (@TypeOf(err) == CompilerError) switch (err) {
         CompilerError.OutOfMemory => "Out of memory",
         CompilerError.NaN => "Not a number",
         CompilerError.Unreachable => "Unreachable compiler state",
         CompilerError.LocalNotFound => "Local variable not found",
         CompilerError.SameInitializer => "Cannot declare a variable with its own initializer",
         CompilerError.TooManyUpvalues => "Exceed number of captured variables. Limit is 2^16",
-    };
+    } else @errorName(err);
 
     stderr.print("\x1b[31m[line {}] Compiler Error in {s}: {s}\x1b[0m\n", .{
         parser.current.line,
@@ -1155,11 +1187,11 @@ pub const Upvalues = struct {
     }
 
     /// Get an upvalue by index
-    pub fn get(self: *const @This(), idx: u16) Upvalue {
+    pub fn get(self: *const @This(), idx: usize) Upvalue {
         if (idx < 16) {
             return self.buffer[idx];
         } else {
-            const overflow_index = idx - 16;
+            const overflow_index: usize = idx - 16;
             return self.overflow.?.items[overflow_index];
         }
     }
@@ -1278,10 +1310,7 @@ pub const Compiler = struct {
     fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
         if (self.enclosing_compiler == null) return null; // Global namespace
         // Try to resolve the identifier as a local variable in the enclosing compiler
-        const uarg = resolveLocal(self.enclosing_compiler.?, name) catch {
-            // SameInitializer error would've already been handled at enclosing compiler so there's no need for any action here
-            return null;
-        };
+        const uarg = try resolveLocal(self.enclosing_compiler.?, name);
         if (uarg) |arg| {
             return try addUpvalue(self, arg, true);
         }

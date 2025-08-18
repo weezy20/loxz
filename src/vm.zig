@@ -2,6 +2,10 @@ const FRAMES_MAX = 64; // Note, frameCount is u8 so this must be within u8 bound
 const STACK_MAX = FRAMES_MAX * ((1 << 16) + 1024); // u16 max locals + 1024 for temporaries.
 const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
 
+// Upvalue encoding constants (shared with compiler)
+const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
+const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01;   // 00000001 - LSB indicates if upvalue is local
+
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
@@ -577,6 +581,35 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     self.runtimeError("Failed to create closure: {s}", .{@errorName(err)});
                     return RuntimeError.InvalidCall;
                 };
+                
+                // Read upvalue data following the closure creation
+                for (0..function.upvalue_count) |i| {
+                    const packed_byte = ip[0];
+                    ip += 1;
+                    
+                    const is_local = (packed_byte & UPVALUE_IS_LOCAL_FLAG) != 0;
+                    const is_wide_index = (packed_byte & UPVALUE_WIDE_INDEX_FLAG) != 0;
+                    
+                    const upvalue_index: usize = if (is_wide_index) blk: {
+                        // Read 2-byte index
+                        const msb = @as(usize, ip[0]);
+                        const lsb = @as(usize, ip[1]);
+                        ip += 2;
+                        break :blk (msb << 8) | lsb;
+                    } else blk: {
+                        // Read 1-byte index
+                        const index = @as(usize, ip[0]);
+                        ip += 1;
+                        break :blk index;
+                    };
+                    
+                    // TODO: Handle upvalue creation based on is_local and upvalue_index
+                    // This would typically involve capturing values from the stack or outer scopes
+                    _ = is_local;
+                    _ = upvalue_index;
+                    _ = i;
+                }
+                
                 self.push(Value{ .Obj = closure });
             },
 
