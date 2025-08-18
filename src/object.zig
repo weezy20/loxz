@@ -413,10 +413,7 @@ pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) 
 /// Create a new ObjClosure without Object wrapper - used by compiler and VM
 /// The allocator should be the same one used to deinit this objclosure which means it accepts the VM.allocator
 pub fn newObjClosure(allocator: *const Allocator, function: *ObjFunction) !*ObjClosure {
-    const upvalues = try allocator.create(Upvalues);
-    errdefer allocator.destroy(upvalues);
-
-    upvalues.* = Upvalues.init(allocator.*);
+    const upvalues = std.ArrayList(*ObjUpvalue).init(allocator.*);
 
     const closure = try allocator.create(ObjClosure);
 
@@ -450,14 +447,13 @@ pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) NativeResult;
 
 pub const ObjClosure = struct {
     function: *ObjFunction,
-    upvalues: *Upvalues,
+    upvalues: std.ArrayList(*ObjUpvalue),
     // Capped to u16 but u16 can't represent u16 max + 1.
     upvalue_count: u32,
 
     /// Deallocate the closure object (doesn't destroy the underlying function)
     pub fn deinit(self: *ObjClosure, allocator: Allocator) void {
         self.upvalues.deinit();
-        allocator.destroy(self.upvalues);
         allocator.destroy(self);
     }
 };
@@ -478,4 +474,3 @@ const tableFindString = @import("table.zig").tableFindString;
 const VM = @import("vm.zig").VM;
 const Chunk = @import("chunk.zig").Chunk;
 const Value = @import("value.zig").Value;
-const Upvalues = @import("compiler.zig").Upvalues;
