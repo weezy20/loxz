@@ -1,4 +1,5 @@
 ## A bytecode VM interpreter for Lox
+<img src="logo/loxz.png" alt="loxz logo" width="200"/>
 
 ### Usage
 
