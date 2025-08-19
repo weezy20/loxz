@@ -1,5 +1,5 @@
 <div align="center">
-<img src="logo/loxz.png" alt="loxz logo"/>
+<img src="logo/loxz.png" alt="loxz logo"/ height=200>
 <h3>A bytecode compiler and interpreter for the Lox programming language</h3>
 </div>
 
