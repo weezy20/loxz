@@ -281,6 +281,14 @@ pub const Object = struct {
             else => null,
         };
     }
+
+    pub fn asUpvalue(self: *const Object) ?*ObjUpvalue {
+        return switch (self.data) {
+            .Upvalue => |u| u,
+            else => null,
+        };
+    }
+
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
@@ -414,9 +422,8 @@ pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) 
 /// The allocator should be the same one used to deinit this objclosure which means it accepts the VM.allocator
 pub fn newObjClosure(allocator: *const Allocator, function: *ObjFunction) !*ObjClosure {
     const upvalues = try std.ArrayList(*ObjUpvalue).initCapacity(allocator.*, function.upvalue_count);
-    for (0..function.upvalue_count) |i| {
-        upvalues[i] = null;
-    }
+    // Don't pre-fill with values - they will be populated by the VM during closure creation
+
     const closure = try allocator.create(ObjClosure);
 
     closure.* = .{

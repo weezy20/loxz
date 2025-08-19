@@ -4,7 +4,7 @@ const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
 
 // Upvalue encoding constants (shared with compiler)
 const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
-const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01;   // 00000001 - LSB indicates if upvalue is local
+const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
 
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
@@ -577,19 +577,21 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 ip += 2;
                 // Safe to unwrap: Compiler guarantee.
                 const function = frame.closure.function.chunk.constants.values[constant_idx].asFunction().?;
-                const closure = Object.newClosure(self, function) catch |err| {
+                const closure_obj = Object.newClosure(self, function) catch |err| {
                     self.runtimeError("Failed to create closure: {s}", .{@errorName(err)});
                     return RuntimeError.InvalidCall;
                 };
-                
+                self.push(Value{ .Obj = closure_obj });
+                const closure = closure_obj.asClosure().?;
+
                 // Read upvalue data following the closure creation
-                for (0..function.upvalue_count) |i| {
+                for (0..closure.upvalue_count) |_| {
                     const packed_byte = ip[0];
                     ip += 1;
-                    
+
                     const is_local = (packed_byte & UPVALUE_IS_LOCAL_FLAG) != 0;
                     const is_wide_index = (packed_byte & UPVALUE_WIDE_INDEX_FLAG) != 0;
-                    
+
                     const upvalue_index: usize = if (is_wide_index) blk: {
                         // Read 2-byte index
                         const msb = @as(usize, ip[0]);
@@ -602,15 +604,25 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                         ip += 1;
                         break :blk index;
                     };
-                    
-                    // TODO: Handle upvalue creation based on is_local and upvalue_index
-                    // This would typically involve capturing values from the stack or outer scopes
-                    _ = is_local;
-                    _ = upvalue_index;
-                    _ = i;
+
+                    // Capture upvalue
+                    const captured_upvalue: *ObjUpvalue = if (is_local) b: {
+                        const local_slot = frame.slots + upvalue_index;
+                        const upvalue = self.captureUpvalue(local_slot) catch |err| {
+                            self.runtimeError("Failed to capture local upvalue: {s}", .{@errorName(err)});
+                            return RuntimeError.InvalidCall;
+                        };
+                        break :b upvalue;
+                    } else b: {
+                        if (upvalue_index >= frame.closure.upvalues.items.len) {
+                            self.runtimeError("Upvalue index {} out of bounds", .{upvalue_index});
+                            return RuntimeError.InvalidCall;
+                        }
+                        break :b frame.closure.upvalues.items[upvalue_index];
+                    };
+                    // Store captured upvalue in closure (equivalent to closure->upvalues[i] = ...)
+                    try closure.upvalues.append(captured_upvalue);
                 }
-                
-                self.push(Value{ .Obj = closure });
             },
 
             // else => {
@@ -761,6 +773,7 @@ const Object = lib.Object;
 const ObjString = lib.ObjString;
 const ObjFunction = lib.ObjFunction;
 const ObjClosure = lib.ObjClosure;
+const ObjUpvalue = lib.ObjUpvalue;
 const ObjNative = lib.ObjNative;
 const Table = lib.Table;
 
@@ -818,4 +831,12 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
     }
 
     self.resetStack();
+}
+
+/// Capture an upvalue pointing to the given stack slot
+fn captureUpvalue(self: *VM, local: *Value) !*ObjUpvalue {
+    // TODO: In a complete implementation, we would maintain a list of open upvalues
+    // to avoid creating duplicates for the same stack slot. For now, we create a new one each time.
+    // TODO: Add a free standing newUpvalue function
+    return (try Object.newUpvalue(self, local)).asUpvalue().?;
 }
