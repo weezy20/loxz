@@ -2,7 +2,8 @@
 
 # PowerShell build script for Windows
 param(
-    [switch]$Force
+    [switch]$Force,
+    [switch]$Download
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,54 +15,100 @@ $ZIG_BIN = ""
 
 Write-Host "[->] Windows PowerShell build script for loxz" -ForegroundColor Cyan
 
-# Check for system zig and verify version
+# Check for system zig and verify version (skip if Download mode is enabled)
 $systemZig = Get-Command zig -ErrorAction SilentlyContinue
 $needsDownload = $false
 
-if ($systemZig) {
-    Write-Host "[+] Found system 'zig' at: $($systemZig.Source)" -ForegroundColor Green
-    
-    # Check if we need a specific version and if -Force is used
-    if ($Force -and (Test-Path $ZIG_VERSION_FILE)) {
-        $REQUIRED_VERSION = Get-Content $ZIG_VERSION_FILE -Raw | ForEach-Object { $_.Trim() }
-        $currentVersion = & "$($systemZig.Source)" version
-        
-        if ($currentVersion -eq $REQUIRED_VERSION) {
-            Write-Host "[+] System Zig version $currentVersion matches required version" -ForegroundColor Green
-            $ZIG_BIN = $systemZig.Source
-        } else {
-            Write-Host "[!] -Force specified: System Zig version $currentVersion does not match required version $REQUIRED_VERSION" -ForegroundColor Yellow
-            Write-Host "[->] Will download and use required version $REQUIRED_VERSION" -ForegroundColor Cyan
-            $needsDownload = $true
-        }
-    } else {
-        # Use system Zig regardless of version when -Force is not specified
-        if (Test-Path $ZIG_VERSION_FILE) {
-            $REQUIRED_VERSION = Get-Content $ZIG_VERSION_FILE -Raw | ForEach-Object { $_.Trim() }
-            $currentVersion = & "$($systemZig.Source)" version
-            if ($currentVersion -ne $REQUIRED_VERSION) {
-                Write-Host "" -ForegroundColor Yellow
-                Write-Host "WARNING: Version mismatch detected!" -ForegroundColor Yellow
-                Write-Host "  Required version (from .zigversion): $REQUIRED_VERSION" -ForegroundColor Yellow
-                Write-Host "  System Zig version: $currentVersion" -ForegroundColor Yellow
-                Write-Host "  Continuing with system Zig (use -Force to download exact version)" -ForegroundColor Yellow
-                Write-Host "" -ForegroundColor Yellow
-            } else {
-                Write-Host "[+] System Zig version matches required version: $currentVersion" -ForegroundColor Green
+if ($Download) {
+    Write-Host "[!] Download mode enabled (-Download), skipping system zig check" -ForegroundColor Yellow
+    $needsDownload = $true
+} else {
+    # First, check for existing local zig installation
+    $localZigBin = $null
+    if (Test-Path $ZIG_DIR) {
+        $zigCandidates = Get-ChildItem -Path $ZIG_DIR -Recurse -Name "zig.exe" -ErrorAction SilentlyContinue
+        foreach ($candidate in $zigCandidates) {
+            $candidatePath = Join-Path $ZIG_DIR $candidate
+            # Verify it's a Windows PE executable
+            try {
+                $bytes = [System.IO.File]::ReadAllBytes($candidatePath) | Select-Object -First 64
+                if ($bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) {
+                    $localZigBin = $candidatePath
+                    break
+                }
+            } catch {
+                continue
             }
         }
-        $ZIG_BIN = $systemZig.Source
     }
-} else {
-    Write-Host "[!] 'zig' binary not found in system PATH." -ForegroundColor Yellow
-    $needsDownload = $true
-}
+    
+    if ($localZigBin) {
+        # Check if local zig version matches .zigversion
+        if (Test-Path $ZIG_VERSION_FILE) {
+            $REQUIRED_VERSION = Get-Content $ZIG_VERSION_FILE -Raw | ForEach-Object { $_.Trim() }
+            try {
+                $localVersion = & "$localZigBin" version
+                if ($localVersion -eq $REQUIRED_VERSION) {
+                    Write-Host "[+] Found compatible local zig installation at $localZigBin (version: $localVersion)" -ForegroundColor Green
+                    $ZIG_BIN = $localZigBin
+                } else {
+                    Write-Host "[!] Local zig at $localZigBin has version $localVersion, but .zigversion requires $REQUIRED_VERSION" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "[!] Could not determine local zig version at $localZigBin" -ForegroundColor Yellow
+            }
+        } else {
+            Write-Host "[+] Found local zig installation at $localZigBin" -ForegroundColor Green
+            $ZIG_BIN = $localZigBin
+        }
+    }
+    
+    # If no compatible local zig found, check system zig
+    if (-not $ZIG_BIN -and $systemZig) {
+    # If no compatible local zig found, check system zig
+    if (-not $ZIG_BIN -and $systemZig) {
+        Write-Host "[+] Found system 'zig' at: $($systemZig.Source)" -ForegroundColor Green
+        
+        # Check if we need a specific version and if -Force is used
+        if ($Force -and (Test-Path $ZIG_VERSION_FILE)) {
+            $REQUIRED_VERSION = Get-Content $ZIG_VERSION_FILE -Raw | ForEach-Object { $_.Trim() }
+            $currentVersion = & "$($systemZig.Source)" version
+            
+            if ($currentVersion -eq $REQUIRED_VERSION) {
+                Write-Host "[+] System Zig version $currentVersion matches required version" -ForegroundColor Green
+                $ZIG_BIN = $systemZig.Source
+            } else {
+                Write-Host "[!] -Force specified: System Zig version $currentVersion does not match required version $REQUIRED_VERSION" -ForegroundColor Yellow
+                Write-Host "[->] Will download and use required version $REQUIRED_VERSION" -ForegroundColor Cyan
+                $needsDownload = $true
+            }
+        } else {
+            # Use system Zig regardless of version when -Force is not specified
+            if (Test-Path $ZIG_VERSION_FILE) {
+                $REQUIRED_VERSION = Get-Content $ZIG_VERSION_FILE -Raw | ForEach-Object { $_.Trim() }
+                $currentVersion = & "$($systemZig.Source)" version
+                if ($currentVersion -ne $REQUIRED_VERSION) {
+                    Write-Host "" -ForegroundColor Yellow
+                    Write-Host "WARNING: Version mismatch detected!" -ForegroundColor Yellow
+                    Write-Host "  Required version (from .zigversion): $REQUIRED_VERSION" -ForegroundColor Yellow
+                    Write-Host "  System Zig version: $currentVersion" -ForegroundColor Yellow
+                    Write-Host "  Continuing with system Zig (use -Force to download exact version)" -ForegroundColor Yellow
+                    Write-Host "" -ForegroundColor Yellow
+                } else {
+                    Write-Host "[+] System Zig version matches required version: $currentVersion" -ForegroundColor Green
+                }
+            }
+            $ZIG_BIN = $systemZig.Source
+        }
+    } elseif (-not $ZIG_BIN) {
+        Write-Host "[!] 'zig' binary not found in system PATH and no local installation found." -ForegroundColor Yellow
+        $needsDownload = $true
+    }
+}if ($needsDownload) {
 
-if ($needsDownload) {
-
-    # Check for existing zig in .zig-install
+    # Check for existing zig in .zig-install (skip if Download mode is enabled)
     $existingZig = $null
-    if (Test-Path $ZIG_DIR) {
+    if ((-not $Download) -and (Test-Path $ZIG_DIR)) {
         $zigCandidates = Get-ChildItem -Path $ZIG_DIR -Recurse -Name "zig.exe" -ErrorAction SilentlyContinue
         foreach ($candidate in $zigCandidates) {
             $candidatePath = Join-Path $ZIG_DIR $candidate
@@ -81,12 +128,16 @@ if ($needsDownload) {
         }
     }
     
-    if ($existingZig) {
+    if ($existingZig -and (-not $Download)) {
         $ZIG_BIN = Join-Path $ZIG_DIR $existingZig
         Write-Host "[+] Found existing Windows zig.exe at: $ZIG_BIN" -ForegroundColor Green
     } else {
-        # Prompt user to download zig
-        if (-not $Force) {
+        if ($Download) {
+            Write-Host "[!] Download mode: Will download fresh copy regardless of existing installation" -ForegroundColor Yellow
+        }
+        
+        # Prompt user to download zig (skip prompt in Download mode)
+        if ((-not $Force) -and (-not $Download)) {
             $response = Read-Host "Do you want to download Zig as per .zigversion and install to .zig-install/? [Y/n]"
             if ($response -match "^[Nn]") {
                 Write-Host "[X] Aborted." -ForegroundColor Red

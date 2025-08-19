@@ -33,6 +33,8 @@ Add execute permissions to the script and run it to obtain the `loxz` binary in 
 ./build.sh
 # Use -f or --force to download exact .zigversion even if system zig is available
 ./build.sh --force
+# Use -d or --download to always download fresh .zigversion zig regardless of existing installations
+./build.sh --download
 # Follow prompts
 # Run loxz
 ./loxz <OPTIONS> <file.lox>
@@ -48,6 +50,10 @@ Add execute permissions to the script and run it to obtain the `loxz` binary in 
  powershell -ExecutionPolicy Bypass -File .\build.ps1
 
  # To force download and install zig as .zigversion pass -Force
+ .\build.ps1 -Force
+ 
+ # To always download fresh .zigversion zig regardless of existing installations
+ .\build.ps1 -Download
 .\build.ps1 -Force
  ```
 
