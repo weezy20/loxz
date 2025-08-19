@@ -413,8 +413,10 @@ pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) 
 /// Create a new ObjClosure without Object wrapper - used by compiler and VM
 /// The allocator should be the same one used to deinit this objclosure which means it accepts the VM.allocator
 pub fn newObjClosure(allocator: *const Allocator, function: *ObjFunction) !*ObjClosure {
-    const upvalues = std.ArrayList(*ObjUpvalue).init(allocator.*);
-
+    const upvalues = try std.ArrayList(*ObjUpvalue).initCapacity(allocator.*, function.upvalue_count);
+    for (0..function.upvalue_count) |i| {
+        upvalues[i] = null;
+    }
     const closure = try allocator.create(ObjClosure);
 
     closure.* = .{

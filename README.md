@@ -1,5 +1,7 @@
-## A bytecode VM interpreter for Lox
-<img src="logo/loxz.png" alt="loxz logo" width="200"/>
+<div align="center">
+<img src="logo/loxz.png" alt="loxz logo"/>
+<h3>A bytecode compiler and interpreter for the Lox programming language</h3>
+</div>
 
 ### Usage
 
