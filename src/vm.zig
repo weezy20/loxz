@@ -2,10 +2,6 @@ const FRAMES_MAX = 64; // Note, frameCount is u8 so this must be within u8 bound
 const STACK_MAX = FRAMES_MAX * ((1 << 16) + 1024); // u16 max locals + 1024 for temporaries.
 const MAX_SWITCH_DEPTH = 64; // Arbitrary limit for switch stack depth
 
-// Upvalue encoding constants (shared with compiler)
-const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
-const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
-
 pub const VM = @This();
 pub const stdout = std.io.getStdOut().writer();
 const stderr = std.io.getStdErr().writer();
@@ -589,8 +585,8 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     const packed_byte = ip[0];
                     ip += 1;
 
-                    const is_local = (packed_byte & UPVALUE_IS_LOCAL_FLAG) != 0;
-                    const is_wide_index = (packed_byte & UPVALUE_WIDE_INDEX_FLAG) != 0;
+                    const is_local = (packed_byte & lib.UPVALUE_IS_LOCAL_FLAG) != 0;
+                    const is_wide_index = (packed_byte & lib.UPVALUE_WIDE_INDEX_FLAG) != 0;
 
                     const upvalue_index: usize = if (is_wide_index) blk: {
                         // Read 2-byte index
@@ -608,7 +604,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     // Capture upvalue
                     const captured_upvalue: *ObjUpvalue = if (is_local) b: {
                         const local_slot = frame.slots + upvalue_index;
-                        const upvalue = self.captureUpvalue(local_slot) catch |err| {
+                        const upvalue = self.captureUpvalue(&local_slot[0]) catch |err| {
                             self.runtimeError("Failed to capture local upvalue: {s}", .{@errorName(err)});
                             return RuntimeError.InvalidCall;
                         };
@@ -623,6 +619,16 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                     // Store captured upvalue in closure (equivalent to closure->upvalues[i] = ...)
                     try closure.upvalues.append(captured_upvalue);
                 }
+            },
+            .GET_UPVALUE => {
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                self.push(frame.closure.upvalues.items[slot].location.*);
+            },
+            .SET_UPVALUE => {
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                frame.closure.upvalues.items[slot].location.* = self.peek(0);
             },
 
             // else => {
@@ -837,5 +843,6 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
 fn captureUpvalue(self: *VM, local: *Value) !*ObjUpvalue {
     // TODO: In a complete implementation, we would maintain a list of open upvalues
     // to avoid creating duplicates for the same stack slot. For now, we create a new one each time.
-    return lib.newUpvalue(self, local);
+    // TODO: This method unmanaged by the VM object list
+    return lib.newUpvalue(&self.allocator, local);
 }

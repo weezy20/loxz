@@ -2,8 +2,8 @@ var debug_level: u8 = 0;
 
 // Upvalue encoding constants for bit-packed upvalue indices
 // Uses MSB of isLocal byte to indicate whether upvalue index is 1-byte or 2-byte
-const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
-const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
+pub const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
+pub const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
 const BYTE_MAX_INDEX: usize = 255; // Threshold for switching to 2-byte encoding
 
 /// Compiler global singleton
