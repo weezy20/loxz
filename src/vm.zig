@@ -843,6 +843,7 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
 fn captureUpvalue(self: *VM, local: *Value) !*ObjUpvalue {
     // TODO: In a complete implementation, we would maintain a list of open upvalues
     // to avoid creating duplicates for the same stack slot. For now, we create a new one each time.
-    // TODO: This method unmanaged by the VM object list
+
+    // TODO: For GC implementation later the unmanaged memory version
     return lib.newUpvalue(&self.allocator, local);
 }
