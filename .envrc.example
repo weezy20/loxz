@@ -1,2 +1,0 @@
-# copy this file to .envrc to use automatic nix-shell with `direnv allow`
-use nix
