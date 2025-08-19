@@ -435,6 +435,15 @@ pub fn newObjClosure(allocator: *const Allocator, function: *ObjFunction) !*ObjC
     return closure;
 }
 
+/// Create a raw upvalue using the provided allocator.
+pub fn newUpvalue(allocator: *const Allocator, location: *Value) !*ObjUpvalue {
+    const upvalue = try allocator.create(ObjUpvalue);
+    upvalue.* = .{
+        .location = location,
+    };
+    return upvalue;
+}
+
 pub const ObjNative = struct {
     name: *ObjString,
     function: NativeFn,
