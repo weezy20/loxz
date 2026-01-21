@@ -51,7 +51,7 @@ pub fn parseArgs(allocator: std.mem.Allocator) !Config {
             validate_file(file) catch |err| {
                 switch (err) {
                     error.InvalidExtension, error.FileNotFound => {
-                        std.log.warn("Invalid file '{s}': must be an existing .lox file", .{filename});
+                        std.log.warn("Invalid file '{s}': must be an existing file with .lox extension", .{filename});
                         return err;
                     },
                     else => return err,

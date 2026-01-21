@@ -1,5 +1,9 @@
 const stderr = std.io.getStdErr().writer();
 
+// Upvalue encoding constants (shared with compiler and VM)
+const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
+const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
+
 /// Disassemble a single instruction and return next offset
 pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator: std.mem.Allocator, opts: struct {
     debugInfo: ?*DebugInfo,
@@ -61,6 +65,9 @@ pub fn disassembleInstruction(chunk: *const Chunk, byte_offset: usize, allocator
         .JUMP_IF_FALSE => return jumpInstruction("OP_JUMP_IF_FALSE", .POSITIVE, chunk, byte_offset, src_info),
         .LOOP => return jumpInstruction("OP_LOOP", .NEGATIVE, chunk, byte_offset, src_info),
         .CALL => return byteInstruction("OP_CALL", chunk, byte_offset, src_info),
+        .CLOSURE => return closureInstruction("OP_CLOSURE", chunk, byte_offset, src_info),
+        .GET_UPVALUE => return U16Instruction("OP_GET_VALUE", chunk, byte_offset, src_info),
+        .SET_UPVALUE => return U16Instruction("OP_SET_VALUE", chunk, byte_offset, src_info),
     }
 }
 
@@ -144,6 +151,59 @@ const Sign = enum {
     /// Negative jump
     NEGATIVE,
 };
+
+fn closureInstruction(name: []const u8, chunk: *const Chunk, offset: usize, src_info: []const u8) usize {
+    var current_offset = offset + 1; // Skip opcode
+
+    // Read and display the function constant
+    const constant_index = (@as(usize, chunk.code[current_offset]) << 8) | @as(usize, chunk.code[current_offset + 1]);
+    current_offset += 2;
+
+    const constant_val = chunk.constants.get(constant_index) catch |err| {
+        std.debug.panic("Error getting constant at index {d}: {}", .{ constant_index, err });
+    };
+
+    stderr.print("{0s} (func const idx: {1d}) [{2}]\t{3s}\n", .{ name, constant_index, constant_val, src_info }) catch {
+        dbg("Failed to print closure constant", .{});
+    };
+
+    // Get the function to know how many upvalues to read
+    const function = constant_val.asFunction() orelse {
+        stderr.print("ERROR: CLOSURE constant is not a function\n", .{}) catch {};
+        return current_offset;
+    };
+
+    // Display upvalue data
+    for (0..function.upvalue_count) |i| {
+        const packed_byte = chunk.code[current_offset];
+        current_offset += 1;
+
+        const is_local = (packed_byte & UPVALUE_IS_LOCAL_FLAG) != 0;
+        const is_wide_index = (packed_byte & UPVALUE_WIDE_INDEX_FLAG) != 0;
+
+        const upvalue_index: usize = if (is_wide_index) blk: {
+            // Read 2-byte index
+            const msb = @as(usize, chunk.code[current_offset]);
+            const lsb = @as(usize, chunk.code[current_offset + 1]);
+            current_offset += 2;
+            break :blk (msb << 8) | lsb;
+        } else blk: {
+            // Read 1-byte index
+            const index = @as(usize, chunk.code[current_offset]);
+            current_offset += 1;
+            break :blk index;
+        };
+
+        const local_str = if (is_local) "local" else "upvalue";
+        const width_str = if (is_wide_index) "2-byte" else "1-byte";
+
+        stderr.print("    upvalue[{d}]: {s} index {d} ({s})\n", .{ i, local_str, upvalue_index, width_str }) catch {
+            dbg("Failed to print upvalue info", .{});
+        };
+    }
+
+    return current_offset;
+}
 
 /// Location for chunk bytecode
 /// Used by write functions when creating bytecode for a given chunk

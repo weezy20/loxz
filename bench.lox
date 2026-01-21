@@ -1,0 +1,10 @@
+// Simple arithmetic benchmark to test against other lox implementations
+var start = clock();
+var x = 1;
+var i = 0;
+while (i < 100000000) {
+    x = x + 1;
+    x = x - 1;
+    i = i + 1;
+}
+print clock() - start;

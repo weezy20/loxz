@@ -1,4 +1,11 @@
 var debug_level: u8 = 0;
+
+// Upvalue encoding constants for bit-packed upvalue indices
+// Uses MSB of isLocal byte to indicate whether upvalue index is 1-byte or 2-byte
+pub const UPVALUE_WIDE_INDEX_FLAG: u8 = 0x80; // 10000000 - MSB set indicates 2-byte index
+pub const UPVALUE_IS_LOCAL_FLAG: u8 = 0x01; // 00000001 - LSB indicates if upvalue is local
+const BYTE_MAX_INDEX: usize = 255; // Threshold for switching to 2-byte encoding
+
 /// Compiler global singleton
 var cc: *Compiler = undefined;
 var parser: Parser = Parser{
@@ -155,31 +162,73 @@ fn variable() void {
     );
 }
 fn namedVariable(name: Token, canAssign: bool, intern_table: *Table) void {
-    if (cc.resolveLocal(&name)) |arg| {
-        if (canAssign and match(TokenType.Equal)) {
-            expression();
-            emitU16Op(OpCode.SET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
-        } else {
-            emitU16Op(OpCode.GET_LOCAL, arg) catch @panic(BYTECODE_FAIL);
+    // Try local variable resolution first
+    if (cc.resolveLocal(&name)) |maybe_arg| {
+        if (maybe_arg) |arg| {
+            if (canAssign and match(TokenType.Equal)) {
+                expression();
+                emitU16Op(OpCode.SET_LOCAL, arg) catch |err| {
+                    ReportCompilerError(err, "local variable assignment");
+                    return;
+                };
+            } else {
+                emitU16Op(OpCode.GET_LOCAL, arg) catch |err| {
+                    ReportCompilerError(err, "local variable access");
+                    return;
+                };
+            }
+            return;
         }
-    } else |_| {
-        // switch (err) {
-        //     // No action required as the two errors we generate are handled.
-        //     CompilerError.LocalNotFound => {},
-        //     CompilerError.SameInitializer => {}, // Will be reported by resolveLocal()
-        //     else => unreachable,
-        // }
+        // Fallthrough to Upvalue resolution i.e. local was not found
+    } else |err| {
+        // Handle specific compiler errors for local resolution
+        switch (err) {
+            CompilerError.SameInitializer => {
+                Error("Cannot read local variable in its own initializer.");
+                return;
+            },
+            else => unreachable, // We don't return any other error from this function
+        }
+    }
 
-        // Fetch the variable's index in the chunk constant pool
-        // Safe as the index returned is within u16 range
-        const uarg = identifierConstant(&name, intern_table);
-        if (canAssign and match(TokenType.Equal)) {
-            expression();
-            emitU16Op(OpCode.SET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
-        } else {
-            emitU16Op(OpCode.GET_GLOBAL, uarg) catch @panic(BYTECODE_FAIL);
+    // Try upvalue resolution if local resolution didn't find anything
+    if (cc.resolveUpvalue(&name)) |maybe_arg| {
+        if (maybe_arg) |arg| {
+            if (canAssign and match(TokenType.Equal)) {
+                expression();
+                emitU16Op(OpCode.SET_UPVALUE, arg) catch |err| {
+                    ReportCompilerError(err, "local variable assignment");
+                    return;
+                };
+            } else {
+                emitU16Op(OpCode.GET_UPVALUE, arg) catch |err| {
+                    ReportCompilerError(err, "local variable access");
+                    return;
+                };
+            }
+            return;
         }
+        // Fallthrough to Global lookup
+    } else |err| {
+        // Handle upvalue resolution errors separately
+        ReportCompilerError(err, "upvalue resolution");
         return;
+    }
+
+    // Fetch the variable's index in the chunk constant pool
+    // Safe as the index returned is within u16 range
+    const uarg = identifierConstant(&name, intern_table);
+    if (canAssign and match(TokenType.Equal)) {
+        expression();
+        emitU16Op(OpCode.SET_GLOBAL, uarg) catch |global_err| {
+            ReportCompilerError(global_err, "global variable assignment");
+            return;
+        };
+    } else {
+        emitU16Op(OpCode.GET_GLOBAL, uarg) catch |global_err| {
+            ReportCompilerError(global_err, "global variable access");
+            return;
+        };
     }
 }
 /// Emit a string
@@ -655,7 +704,10 @@ fn defineVariable(global: usize) void {
         markInitialized();
         return;
     }
-    emitU16Op(OpCode.DEFINE_GLOBAL, global) catch @panic("Failed to emit DEFINE_GLOBAL bytecode");
+    emitU16Op(OpCode.DEFINE_GLOBAL, global) catch |err| {
+        ReportCompilerError(err, "global variable definition");
+        return;
+    };
 }
 /// Function declaration
 fn funDeclaration() void {
@@ -666,17 +718,19 @@ fn funDeclaration() void {
         return;
     }
     markInitialized();
-    defineFunction(FunctionType.Function);
+    defineFunction(FunctionType.Function) catch |err| {
+        ReportCompilerError(err, "function definition");
+        return;
+    };
     defineVariable(global);
 }
-fn defineFunction(ty: FunctionType) void {
-    const enclosing_compiler = cc;
-
-    var local_compiler = Compiler.init(
+fn defineFunction(ty: FunctionType) !void {
+    var local_compiler = try Compiler.init(
         parser.vm.allocator,
         parser.vm,
         ty,
-    ) catch @panic(HEAP_FAIL);
+        cc,
+    );
     defer local_compiler.deinit();
 
     cc = &local_compiler; // Set current compiler to the new function compiler
@@ -684,10 +738,19 @@ fn defineFunction(ty: FunctionType) void {
     // The function's name was already interned by parseVariable. We look it up
     // here to avoid calling newString again, which was causing a double-free.
     // We need to clone the string as on local-compiler deinit, it would wrongly try to free this string.
-    cc.function.name = if (ty == FunctionType.Function)
-        lib.tableFindString(enclosing_compiler.stringTable, parser.previous.lexeme).?.clone()
-    else
-        null;
+    cc.function.name = if (ty == FunctionType.Function) blk: {
+        if (lib.tableFindString(cc.enclosing_compiler.?.stringTable, parser.previous.lexeme)) |found_name| {
+            break :blk found_name.clone();
+        } else {
+            // If not found in enclosing string table, create it
+            const obj_intern = Object.newString(
+                parser.vm,
+                &[_][]const u8{parser.previous.lexeme},
+                cc.enclosing_compiler.?.stringTable,
+            ) catch @panic(HEAP_FAIL);
+            break :blk obj_intern.obj.data.String.clone();
+        }
+    } else null;
 
     if (ty != .Script) {
         cc.locals.items[0].name = parser.previous;
@@ -713,11 +776,38 @@ fn defineFunction(ty: FunctionType) void {
     const func = endCompiler() catch @panic("Failed to compile function");
 
     // Restore the enclosing compiler
-    cc = enclosing_compiler;
-    const obj = parser.vm.addObjFunction(func) catch @panic(HEAP_FAIL);
-    emitConstant(Value{ .Obj = obj }) catch @panic("Failed to emit function constant bytecode");
+    cc = cc.enclosing_compiler.?;
+    const obj = try parser.vm.addObjFunction(func);
+    // The original clox implementation treats all objFunctions as objClosures so we will follow it
+    // But this can and should be optimized away.
+    try emitU16Op(OpCode.CLOSURE, makeConstant(Value{ .Obj = obj }));
 
-    lib.tableAddAll(local_compiler.stringTable, enclosing_compiler.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
+    for (0..func.upvalue_count) |i| {
+        const upvalue = local_compiler.upvalues.get(i);
+        const upvalue_index = upvalue.index;
+
+        // Create packed byte with local flag and width indicator
+        var packed_byte: u8 = 0x00;
+        if (upvalue.isLocal) {
+            packed_byte |= UPVALUE_IS_LOCAL_FLAG;
+        }
+
+        // Use bit-packed encoding: 1 byte for indices <= 255, 2 bytes for larger indices
+        // The index is either the local slot index or the upvalue index to be captured
+        if (upvalue_index <= BYTE_MAX_INDEX) {
+            // Single byte encoding: MSB clear, remaining bits include local flag
+            emit.byte(packed_byte);
+            emit.byte(@intCast(upvalue_index));
+        } else {
+            // Two byte encoding: MSB set to indicate wide index, remaining bits include local flag
+            packed_byte |= UPVALUE_WIDE_INDEX_FLAG;
+            emit.byte(packed_byte);
+            emit.byte(@intCast((upvalue_index >> 8) & 0xff)); // MSB of index
+            emit.byte(@intCast(upvalue_index & 0xff)); // LSB of index
+        }
+    }
+
+    lib.tableAddAll(local_compiler.stringTable, cc.stringTable) catch @panic("Failed to add all strings from local compiler to enclosing compiler");
 }
 /// Emit bytecode for a declaration
 fn declaration() void {
@@ -769,6 +859,28 @@ fn ErrorAtCurrent(msg: ?[]const u8) void {
 /// Report error at previous token
 fn Error(msg: ?[]const u8) void {
     errorAt(&parser.previous, msg, null) catch {};
+}
+
+/// Handle CompilerError unions and report appropriate error messages
+/// Sets parser to panic mode and reports the error to stderr
+fn ReportCompilerError(err: anyerror, context: []const u8) void {
+    parser.panic_mode = true;
+    parser.had_error = true;
+
+    const error_msg = if (@TypeOf(err) == CompilerError) switch (err) {
+        CompilerError.OutOfMemory => "Out of memory",
+        CompilerError.NaN => "Not a number",
+        CompilerError.Unreachable => "Unreachable compiler state",
+        CompilerError.LocalNotFound => "Local variable not found",
+        CompilerError.SameInitializer => "Cannot declare a variable with its own initializer",
+        CompilerError.TooManyUpvalues => "Exceed number of captured variables. Limit is 2^16",
+    } else @errorName(err);
+
+    stderr.print("\x1b[31m[line {}] Compiler Error in {s}: {s}\x1b[0m\n", .{
+        parser.current.line,
+        context,
+        error_msg,
+    }) catch {};
 }
 fn errorAt(token: *Token, msg: ?[]const u8, span: ?[2]usize) !void {
     parser.had_error = true;
@@ -993,6 +1105,8 @@ inline fn endCompiler() !*ObjFunction {
     if (debug_level > 0 and !parser.had_error)
         currentChunk().disassemble(parser.vm.allocator, if (cc.function.name) |name| name.chars else "script", parser.debugInfo) catch std.debug.print("Skipping: Disassemble code chunk");
     emitReturn();
+    // Mark function as transferred - ownership will go to VM via addObjFunction
+    cc.function_transferred = true;
     return cc.function;
 }
 
@@ -1004,9 +1118,91 @@ const CompilationResult = struct {
 
 const MAX_LOCAL_COUNT: u16 = std.math.maxInt(u16); // Extending to 65535 locals
 
+/// Hybrid upvalues storage: inline buffer for common case, dynamic list for >16 upvalues. 16 is an arbitrary choice here.
+pub const Upvalues = struct {
+    /// Small inline buffer for upto 16 upvalues
+    buffer: [16]Upvalue = undefined,
+    /// Fallback to dynamic list
+    overflow: ?std.ArrayList(Upvalue) = null,
+    /// Current count of upvalues
+    count: u16 = 0,
+    /// Allocator for overflow list
+    allocator: std.mem.Allocator,
+
+    pub fn init(allocator: std.mem.Allocator) @This() {
+        return .{
+            .allocator = allocator,
+        };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        if (self.overflow) |overflow| {
+            overflow.deinit();
+        }
+        self.* = undefined;
+    }
+
+    /// Append an upvalue
+    pub fn append(self: *@This(), upvalue: Upvalue) !void {
+        if (self.count < 16) {
+            // Use inline buffer
+            self.buffer[self.count] = upvalue;
+        } else {
+            // Use overflow list
+            if (self.overflow == null) {
+                self.overflow = try std.ArrayList(Upvalue).initCapacity(self.allocator, 16);
+            }
+            try self.overflow.?.append(upvalue);
+        }
+        self.count += 1;
+    }
+
+    /// Find an upvalue by index and isLocal properties
+    /// Returns the upvalue index if found, null otherwise
+    pub fn findUpvalue(self: *const @This(), upvalue_count: u16, index: u16, isLocal: bool) ?u16 {
+        // For the common case (≤16 upvalues), use direct buffer access
+        if (upvalue_count <= 16) {
+            const upvalue_slice = self.buffer[0..upvalue_count];
+            for (upvalue_slice, 0..) |upvalue, i| {
+                if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                    return @intCast(i);
+                }
+            }
+        } else {
+            // For overflow case, check both buffer and overflow list
+            for (self.buffer, 0..) |upvalue, i| {
+                if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                    return @intCast(i);
+                }
+            }
+            if (self.overflow) |overflow| {
+                for (overflow.items, 0..) |upvalue, i| {
+                    if (upvalue.index == index and upvalue.isLocal == isLocal) {
+                        return @intCast(16 + i); // Offset by buffer size
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /// Get an upvalue by index
+    pub fn get(self: *const @This(), idx: usize) Upvalue {
+        if (idx < 16) {
+            return self.buffer[idx];
+        } else {
+            const overflow_index: usize = idx - 16;
+            return self.overflow.?.items[overflow_index];
+        }
+    }
+};
+
 pub const Compiler = struct {
     function: *ObjFunction,
     type: FunctionType,
+    /// Upvalues list
+    upvalues: Upvalues,
+    /// Locals list
     locals: std.ArrayList(Local),
     /// Number of blocks surrounding current code block
     scopeDepth: i32, // Same as clox
@@ -1016,14 +1212,19 @@ pub const Compiler = struct {
     stringTable: *Table,
     /// Switch depth
     switchDepth: u8 = 0,
+    /// Tracks if function ownership was transferred to VM
+    function_transferred: bool = false,
+    /// Reference to the enclosing compiler
+    enclosing_compiler: ?*Compiler = null,
 
     // Use same hash across table/objstring,
     // NOTE: ObjString still uses loxHash, but the HashTable uses Clhash if available. This doesn't matter for checking values
     // but should be cleared up in the future. For now we just stick to the defaults...
     // cc.constantTable = Table.initWithHashFn(allocator, if (lib.hasClhash) .clhash else .default);
 
-    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType) !@This() {
+    pub fn init(allocator: std.mem.Allocator, vm: *VM, @"type": FunctionType, enclosing: ?*Compiler) !@This() {
         var locals = try std.ArrayList(Local).initCapacity(allocator, 16);
+        const upvalues = Upvalues.init(allocator);
         // Claim slot 0 for vm usage
         try locals.append(Local{ .depth = 0, .name = Token{
             .tokenType = TokenType.Error,
@@ -1031,30 +1232,43 @@ pub const Compiler = struct {
             .error_msg = "VM Reserved Token",
             .line = 0,
         } });
+
+        // Create function object directly without Object wrapper
+        // The Object wrapper will be created later in endCompiler -> addObjFunction
+        const function = try lib.newFunction(&vm.allocator, null, null);
+
         return .{
             .locals = locals,
+            .upvalues = upvalues,
             .scopeDepth = 0,
             .stringTable = try Table.init(allocator),
             .constantTable = try Table.initWithHashFn(allocator, .default),
-            .function = try lib.newFunction(vm, null, null),
+            .function = function,
             .type = @"type",
+            .enclosing_compiler = enclosing,
         };
     }
     pub fn deinit(self: *@This()) void {
         self.stringTable.deinit();
         self.constantTable.deinit();
         self.locals.deinit();
+        self.upvalues.deinit();
+        // Free the function only if ownership wasn't transferred to VM
+        if (!self.function_transferred) {
+            self.function.deinit(self.function.chunk.allocator.*);
+        }
         self.* = undefined;
     }
     /// Number of locals in Compiler.locals as usize
     inline fn localCount(self: *const @This()) usize {
         return self.locals.items.len;
     }
-    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!u16 {
-        if (self.localCount() == 0) return CompilerError.LocalNotFound;
+    /// Looks at the current compiler locals for a match. Returns `CompilerError.SameInitializer` in case the same var is used for initializing
+    fn resolveLocal(self: *Compiler, name: *const Token) CompilerError!?u16 {
+        if (self.localCount() == 0) return null;
         var i: u16 = @intCast(self.localCount() - 1); // Safe: we never add more than MAX_LOCAL_COUNT locals
 
-        while (true) {
+        while (true) : (i -= 1) {
             const local = &self.locals.items[i];
             if (identifiersEqual(&local.name, name)) {
                 if (local.depth == -1) {
@@ -1063,12 +1277,55 @@ pub const Compiler = struct {
                 }
                 return i;
             }
-
             if (i == 0) break;
-            i -= 1;
         }
-        return CompilerError.LocalNotFound;
+        return null;
     }
+    fn addUpvalue(compiler: *Compiler, index: u16, isLocal: bool) CompilerError!u16 {
+        const upvalue_count = compiler.function.upvalue_count;
+
+        // Check if this upvalue already exists using the Upvalues method
+        if (compiler.upvalues.findUpvalue(upvalue_count, index, isLocal)) |existing_index| {
+            return existing_index;
+        }
+
+        // Add new upvalue
+        compiler.upvalues.append(Upvalue{
+            .index = index,
+            .isLocal = isLocal,
+        }) catch {
+            ReportCompilerError(CompilerError.OutOfMemory, "adding upvalue");
+            return CompilerError.OutOfMemory;
+        };
+
+        const uvc = compiler.function.upvalue_count;
+        if (uvc == MAX_LOCAL_COUNT) {
+            return CompilerError.TooManyUpvalues;
+        }
+        compiler.function.upvalue_count += 1;
+        return compiler.function.upvalue_count - 1;
+    }
+    /// Looks for a local variable declared in any of the surrounding functions.
+    /// If it finds one, it returns an “upvalue index” for that variable.
+    fn resolveUpvalue(self: *Compiler, name: *const Token) CompilerError!?u16 {
+        if (self.enclosing_compiler == null) return null; // Global namespace
+        // Try to resolve the identifier as a local variable in the enclosing compiler
+        const uarg = try resolveLocal(self.enclosing_compiler.?, name);
+        if (uarg) |arg| {
+            return try addUpvalue(self, arg, true);
+        }
+        const upvalue = try resolveUpvalue(self.enclosing_compiler.?, name);
+        if (upvalue) |v| {
+            return try addUpvalue(self, v, false);
+        }
+
+        return null;
+    }
+};
+
+pub const Upvalue = struct {
+    index: u16,
+    isLocal: bool,
 };
 
 pub const Local = struct {

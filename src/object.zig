@@ -11,9 +11,8 @@ pub const Object = struct {
         String: *ObjString,
         Function: *ObjFunction,
         Native: *ObjNative,
-        // Class: *Class,
-        // Instance: *Instance,
-        // Array: *Array,
+        Closure: *ObjClosure,
+        Upvalue: *ObjUpvalue,
 
         pub fn format(self: Data, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
             _ = options;
@@ -46,6 +45,20 @@ pub const Object = struct {
                         try writer.print("<ObjNative: [name: {s}]>", .{n.name.chars});
                     }
                 },
+                .Closure => |c| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("<closure: {}>", .{c.function});
+                    } else { // Debug mode: `{}`
+                        try writer.print("<ObjClosure: [function: {}]>", .{c.function});
+                    }
+                },
+                .Upvalue => |u| {
+                    if (std.mem.eql(u8, fmt, "s")) { // Simple mode: `{s}`
+                        try writer.print("<upvalue>", .{});
+                    } else { // Debug mode: `{}`
+                        try writer.print("<ObjUpvalue: [location: {}]>", .{u.location});
+                    }
+                },
             }
         }
     };
@@ -66,6 +79,7 @@ pub const Object = struct {
         obj_function.* = .{
             .name = if (name) |n| n.clone() else null,
             .arity = arity orelse 0,
+            .upvalue_count = 0,
             .chunk = Chunk.init(&vm.allocator),
         };
 
@@ -185,6 +199,54 @@ pub const Object = struct {
         return obj;
     }
 
+    /// Allocate a new ObjClosure using the VM's allocator and add it to the VM's object list.
+    pub fn newClosure(vm: *VM, function: *ObjFunction) !*Object {
+        const allocator = vm.allocator;
+
+        const obj_closure = try newObjClosure(&allocator, function);
+        errdefer {
+            obj_closure.deinit(allocator);
+        }
+
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Closure = obj_closure,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
+    }
+
+    /// Allocate a new ObjUpvalue using the VM's allocator and add it to the VM's object list.
+    pub fn newUpvalue(vm: *VM, location: *Value) !*Object {
+        const allocator = vm.allocator;
+
+        const obj_upvalue = try allocator.create(ObjUpvalue);
+        errdefer allocator.destroy(obj_upvalue);
+
+        obj_upvalue.* = .{
+            .location = location,
+        };
+
+        const obj = try allocator.create(Object);
+        errdefer allocator.destroy(obj);
+
+        obj.* = .{
+            .allocator = allocator,
+            .data = .{
+                .Upvalue = obj_upvalue,
+            },
+        };
+
+        vm.addObj(obj);
+        return obj;
+    }
+
     pub fn asString(self: *const Object) ?[]const u8 {
         return switch (self.data) {
             .String => |s| s.chars,
@@ -198,6 +260,35 @@ pub const Object = struct {
             else => null,
         };
     }
+
+    pub fn asFunction(self: *const Object) ?*ObjFunction {
+        return switch (self.data) {
+            .Function => |f| f,
+            else => null,
+        };
+    }
+
+    pub fn asNative(self: *const Object) ?*ObjNative {
+        return switch (self.data) {
+            .Native => |n| n,
+            else => null,
+        };
+    }
+
+    pub fn asClosure(self: *const Object) ?*ObjClosure {
+        return switch (self.data) {
+            .Closure => |c| c,
+            else => null,
+        };
+    }
+
+    pub fn asUpvalue(self: *const Object) ?*ObjUpvalue {
+        return switch (self.data) {
+            .Upvalue => |u| u,
+            else => null,
+        };
+    }
+
     pub fn deinit(self: *Object) void {
         switch (self.data) {
             .String => |s| {
@@ -207,7 +298,13 @@ pub const Object = struct {
                 f.deinit(self.allocator);
             },
             .Native => |n| {
-                self.allocator.destroy(n);
+                n.deinit(self.allocator);
+            },
+            .Closure => |c| {
+                c.deinit(self.allocator);
+            },
+            .Upvalue => |u| {
+                u.deinit(self.allocator);
             },
         }
         self.allocator.destroy(self);
@@ -228,14 +325,18 @@ pub const Object = struct {
                 if (s1 == s2) return true; // Fast path for same string
                 return ObjString.eql(s1, s2);
             },
-            .Function => {
-                @panic("Function equality not implemented yet");
+            .Function, .Closure => {
+                return false;
             },
             .Native => |n1| {
                 const n2 = other.data.Native;
+                // Compare function pointers for equality
                 return n1.function == n2.function;
             },
-            // else => return false,
+            .Upvalue => {
+                // Upvalues are compared by identity, not value
+                return false;
+            },
         }
     }
 };
@@ -286,6 +387,7 @@ pub const ObjString = struct {
 pub const ObjFunction = struct {
     name: ?*ObjString = null,
     arity: u32,
+    upvalue_count: u16,
     chunk: Chunk,
 
     /// Create and return an undefined function object.
@@ -300,9 +402,57 @@ pub const ObjFunction = struct {
     }
 };
 
+/// Create a new ObjFunction without Object wrapper - used by compiler
+/// The allocator should be the same one used to deinit this objfunction which means it accepts the VM.allocator
+pub fn newFunction(allocator: *const Allocator, name: ?*ObjString, arity: ?u32) !*ObjFunction {
+    const function = try allocator.create(ObjFunction);
+    errdefer allocator.destroy(function);
+
+    function.* = .{
+        .name = if (name) |n| n.clone() else null,
+        .arity = arity orelse 0,
+        .upvalue_count = 0,
+        .chunk = Chunk.init(allocator),
+    };
+
+    return function;
+}
+
+/// Create a new ObjClosure without Object wrapper - used by compiler and VM
+/// The allocator should be the same one used to deinit this objclosure which means it accepts the VM.allocator
+pub fn newObjClosure(allocator: *const Allocator, function: *ObjFunction) !*ObjClosure {
+    const upvalues = try std.ArrayList(*ObjUpvalue).initCapacity(allocator.*, function.upvalue_count);
+    // Don't pre-fill with values - they will be populated by the VM during closure creation
+
+    const closure = try allocator.create(ObjClosure);
+
+    closure.* = .{
+        .function = function,
+        .upvalues = upvalues,
+        .upvalue_count = function.upvalue_count,
+    };
+
+    return closure;
+}
+
+/// Create a raw upvalue using the provided allocator.
+pub fn newUpvalue(allocator: *const Allocator, location: *Value) !*ObjUpvalue {
+    const upvalue = try allocator.create(ObjUpvalue);
+    upvalue.* = .{
+        .location = location,
+    };
+    return upvalue;
+}
+
 pub const ObjNative = struct {
     name: *ObjString,
     function: NativeFn,
+
+    /// Deallocate the native object (currently just destroys the struct itself)
+    pub fn deinit(self: *ObjNative, allocator: Allocator) void {
+        // Note: We don't deinit the name since it's owned by the string intern table
+        allocator.destroy(self);
+    }
 };
 
 /// Native function result type - allows native functions to signal errors
@@ -313,21 +463,27 @@ pub const NativeResult = union(enum) {
 
 pub const NativeFn = *const fn (arg_count: u8, args: [*]Value) NativeResult;
 
-/// Create an ObjFunction with the vm allocator, if you want an Object wrapper use `Object.newFunction`.
-pub fn newFunction(
-    vm: *VM,
-    name: ?*ObjString,
-    arity: ?u32,
-) !*ObjFunction {
-    // Create the function object
-    const obj_func = try vm.allocator.create(ObjFunction);
-    obj_func.* = ObjFunction{
-        .name = if (name) |n| n.clone() else null,
-        .arity = arity orelse 0,
-        .chunk = Chunk.init(&vm.allocator),
-    };
-    return obj_func;
-}
+pub const ObjClosure = struct {
+    function: *ObjFunction,
+    upvalues: std.ArrayList(*ObjUpvalue),
+    // Capped to u16 but u16 can't represent u16 max + 1.
+    upvalue_count: u32,
+
+    /// Deallocate the closure object (doesn't destroy the underlying function)
+    pub fn deinit(self: *ObjClosure, allocator: Allocator) void {
+        self.upvalues.deinit();
+        allocator.destroy(self);
+    }
+};
+
+pub const ObjUpvalue = struct {
+    location: *Value,
+
+    /// Deallocate the upvalue object
+    pub fn deinit(self: *ObjUpvalue, allocator: Allocator) void {
+        allocator.destroy(self);
+    }
+};
 
 // const hasher = @import("table.zig").loxHash;
 const hasher = @import("common.zig").hasher;

@@ -31,7 +31,7 @@ frameCount: u8, // Ok because frames_max is 64
 
 /// An ongoing function call.
 const CallFrame = struct {
-    function: *ObjFunction,
+    closure: *ObjClosure,
     ip: [*]u8,
     slots: [*]Value,
 };
@@ -233,7 +233,7 @@ inline fn pop(self: *VM) Value {
 
 pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) InterpretResult {
     global_debug_level = opts.debug_level;
-    var compiler = lib.Compiler.init(self.allocator, self, .Script) catch |err| {
+    var compiler = lib.Compiler.init(self.allocator, self, .Script, null) catch |err| {
         std.debug.print("Compiler init error : {s}", .{@errorName(err)});
         return .compile_error;
     };
@@ -250,9 +250,22 @@ pub fn interpret(self: *VM, source: []const u8, opts: lib.InterpreterOpts) Inter
         return .compile_error;
     }
     const function = compile_result.function.?;
-    const obj = self.addObjFunction(function) catch return .compile_error;
-    self.push(Value{ .Obj = obj });
-    self.call(function, 0) catch |err| return .{ .runtime_error = err };
+
+    // TODO: We avoid the ObjFunction creation, ObjClosure creation, pop, push dance because we don't require it
+    // It only becomes relevant when a GC is in place.
+    //
+    // const obj = self.addObjFunction(function) catch return .compile_error;
+    // self.push(Value{ .Obj = obj });
+    // const closure_obj = Object.newClosure(self, function) catch return .compile_error;
+    // _ = self.pop();  // Remove function object
+    // self.push(Value{ .Obj = closure_obj });
+    // self.callClosure(closure_obj.asClosure().?, 0) catch |err| return .{ .runtime_error = err };
+
+    const closure_obj = Object.newClosure(self, function) catch return .compile_error;
+    const closure = closure_obj.asClosure().?;
+    self.push(Value{ .Obj = closure_obj });
+
+    self.callClosure(closure, 0) catch |err| return .{ .runtime_error = err };
 
     lib.tableAddAll(compilerStringTable, self.stringTable) catch |err| {
         std.debug.print("Warning: Error initializing string table: {s}\n", .{@errorName(err)});
@@ -303,7 +316,7 @@ inline fn currentFrame(self: *VM) *CallFrame {
     return &self.frames[self.frameCount - 1];
 }
 inline fn currentChunk(self: *VM) *Chunk {
-    return &self.currentFrame().function.chunk;
+    return &self.currentFrame().closure.function.chunk;
 }
 
 fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
@@ -315,18 +328,18 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
 
         // Only do debug work if debugging is enabled
         if (global_debug_level > 0) {
-            const debug_offset = @intFromPtr(ip) - @intFromPtr(frame.function.chunk.code);
+            const debug_offset = @intFromPtr(ip) - @intFromPtr(frame.closure.function.chunk.code);
             if (self.debugInfo) |d| blk: {
-                if (debug_offset >= frame.function.chunk.count) break :blk;
+                if (debug_offset >= frame.closure.function.chunk.count) break :blk;
                 _ = lib.disassembleInstruction(
-                    &frame.function.chunk,
+                    &frame.closure.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = d, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
                 );
             } else {
                 _ = lib.disassembleInstruction(
-                    &frame.function.chunk,
+                    &frame.closure.function.chunk,
                     debug_offset,
                     self.allocator,
                     .{ .debugInfo = null, .prefix = "\x1b[1;32mVM Executing\x1b[0m" },
@@ -352,13 +365,13 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .CONSTANT => {
                 const constant_index = ip[0];
                 ip += 1;
-                const constant_value = frame.function.chunk.constants.values[constant_index];
+                const constant_value = frame.closure.function.chunk.constants.values[constant_index];
                 self.push(constant_value);
             },
             .CONSTANT_LONG => {
                 const constant_index = (@as(usize, ip[0]) << 16) | (@as(usize, ip[1]) << 8) | @as(usize, ip[2]);
                 ip += 3;
-                const constant_value = frame.function.chunk.constants.values[constant_index];
+                const constant_value = frame.closure.function.chunk.constants.values[constant_index];
                 self.push(constant_value);
             },
             .NEGATE => {
@@ -455,7 +468,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .DEFINE_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name_val = frame.function.chunk.constants.values[name_idx];
+                const name_val = frame.closure.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 _ = try self.globals.set(name, self.peek(0));
                 const val = self.pop();
@@ -464,7 +477,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .GET_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name_val = frame.function.chunk.constants.values[name_idx];
+                const name_val = frame.closure.function.chunk.constants.values[name_idx];
                 const name = name_val.asObjString().?; // Safe because we never emit this bytecode without a valid string name
                 if (self.globalCache.lookup(name)) |value| {
                     self.push(value);
@@ -483,7 +496,7 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
             .SET_GLOBAL => {
                 const name_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
                 ip += 2;
-                const name = frame.function.chunk.constants.values[name_idx].asObjString().?;
+                const name = frame.closure.function.chunk.constants.values[name_idx].asObjString().?;
                 if (try self.globals.set(name, self.peek(0))) {
                     std.debug.assert(self.globals.delete(name));
                     // Call runtimeError with format string and args
@@ -555,6 +568,68 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
                 frame = &self.frames[self.frameCount - 1];
                 ip = frame.ip;
             },
+            .CLOSURE => {
+                const constant_idx = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                // Safe to unwrap: Compiler guarantee.
+                const function = frame.closure.function.chunk.constants.values[constant_idx].asFunction().?;
+                const closure_obj = Object.newClosure(self, function) catch |err| {
+                    self.runtimeError("Failed to create closure: {s}", .{@errorName(err)});
+                    return RuntimeError.InvalidCall;
+                };
+                self.push(Value{ .Obj = closure_obj });
+                const closure = closure_obj.asClosure().?;
+
+                // Read upvalue data following the closure creation
+                for (0..closure.upvalue_count) |_| {
+                    const packed_byte = ip[0];
+                    ip += 1;
+
+                    const is_local = (packed_byte & lib.UPVALUE_IS_LOCAL_FLAG) != 0;
+                    const is_wide_index = (packed_byte & lib.UPVALUE_WIDE_INDEX_FLAG) != 0;
+
+                    const upvalue_index: usize = if (is_wide_index) blk: {
+                        // Read 2-byte index
+                        const msb = @as(usize, ip[0]);
+                        const lsb = @as(usize, ip[1]);
+                        ip += 2;
+                        break :blk (msb << 8) | lsb;
+                    } else blk: {
+                        // Read 1-byte index
+                        const index = @as(usize, ip[0]);
+                        ip += 1;
+                        break :blk index;
+                    };
+
+                    // Capture upvalue
+                    const captured_upvalue: *ObjUpvalue = if (is_local) b: {
+                        const local_slot = frame.slots + upvalue_index;
+                        const upvalue = self.captureUpvalue(&local_slot[0]) catch |err| {
+                            self.runtimeError("Failed to capture local upvalue: {s}", .{@errorName(err)});
+                            return RuntimeError.InvalidCall;
+                        };
+                        break :b upvalue;
+                    } else b: {
+                        if (upvalue_index >= frame.closure.upvalues.items.len) {
+                            self.runtimeError("Upvalue index {} out of bounds", .{upvalue_index});
+                            return RuntimeError.InvalidCall;
+                        }
+                        break :b frame.closure.upvalues.items[upvalue_index];
+                    };
+                    // Store captured upvalue in closure (equivalent to closure->upvalues[i] = ...)
+                    try closure.upvalues.append(captured_upvalue);
+                }
+            },
+            .GET_UPVALUE => {
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                self.push(frame.closure.upvalues.items[slot].location.*);
+            },
+            .SET_UPVALUE => {
+                const slot = (@as(usize, ip[0]) << 8) | @as(usize, ip[1]);
+                ip += 2;
+                frame.closure.upvalues.items[slot].location.* = self.peek(0);
+            },
 
             // else => {
             //     self.runtimeError("Unknown opcode: {d}", .{@intFromEnum(instruction)});
@@ -568,8 +643,9 @@ fn run(self: *VM, stack_tracing: bool) RuntimeError!void {
 }
 
 fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
-    if (callee.isFunction()) |function| {
-        return self.call(function, arg_count);
+    // Since every ObjFunction is now treated as a ObjClosure
+    if (callee.isClosure()) |closure| {
+        return self.callClosure(closure, arg_count);
     }
     if (callee.isNative()) |native| {
         return self.callNative(native, arg_count);
@@ -577,20 +653,26 @@ fn callValue(self: *VM, callee: Value, arg_count: u8) RuntimeError!void {
     self.runtimeError("Can only call functions and classes.", .{});
     return RuntimeError.InvalidCall;
 }
-/// Setup callframe
-fn call(self: *VM, function: *ObjFunction, arg_count: u8) RuntimeError!void {
-    if (function.arity != arg_count) {
-        self.runtimeError("Expected {d} arguments but got {d}", .{ function.arity, arg_count });
+
+/// Setup callframe for closure
+fn callClosure(self: *VM, closure: *ObjClosure, arg_count: u8) RuntimeError!void {
+    if (closure.function.arity != arg_count) {
+        self.runtimeError("Expected {d} arguments but got {d}", .{ closure.function.arity, arg_count });
         return RuntimeError.InvalidCall;
     }
+    return self.call(closure, arg_count);
+}
+
+/// Setup callframe
+fn call(self: *VM, closure: *ObjClosure, arg_count: u8) RuntimeError!void {
     if (self.frameCount == FRAMES_MAX) {
         self.runtimeError("Stack overflow", .{});
         return RuntimeError.InvalidCall;
     }
     var frame = &self.frames[self.frameCount];
     self.frameCount += 1;
-    frame.function = function;
-    frame.ip = function.chunk.code;
+    frame.closure = closure;
+    frame.ip = closure.function.chunk.code;
     frame.slots = self.stackTop - arg_count - 1;
 }
 
@@ -696,6 +778,8 @@ const RuntimeError = lib.RuntimeError;
 const Object = lib.Object;
 const ObjString = lib.ObjString;
 const ObjFunction = lib.ObjFunction;
+const ObjClosure = lib.ObjClosure;
+const ObjUpvalue = lib.ObjUpvalue;
 const ObjNative = lib.ObjNative;
 const Table = lib.Table;
 
@@ -704,7 +788,9 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
         // Calculate current instruction offset
         // self.ip points to the NEXT instruction, so subtract 1 for the current opcode
         // If the error is due to an operand, this might need adjustment or more info from the caller.
-        const offset = @intFromPtr(self.currentFrame().ip) - @intFromPtr(self.currentChunk().code) - 1;
+        const ip_addr = @intFromPtr(self.currentFrame().ip);
+        const code_addr = @intFromPtr(self.currentChunk().code);
+        const offset = if (ip_addr > code_addr) ip_addr - code_addr - 1 else 0;
         const line = d.getLine(offset);
         // ANSI escape for yellow gold: \x1b[1;33m, reset: \x1b[0m
         if (line) |l| {
@@ -727,8 +813,10 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
     stderr.print("== Stack trace ==\n", .{}) catch {};
     while (i >= 0) : (i -= 1) {
         const frame = &self.frames[i];
-        const function = frame.function;
-        const instruction = frame.ip - function.chunk.code - 1;
+        const function = frame.closure.function;
+        const ip_addr = @intFromPtr(frame.ip);
+        const code_addr = @intFromPtr(function.chunk.code);
+        const instruction = if (ip_addr > code_addr) ip_addr - code_addr - 1 else 0;
 
         if (self.debugInfo) |d| {
             if (d.getLine(instruction)) |line| {
@@ -749,4 +837,13 @@ fn runtimeError(self: *VM, comptime fmt_str: []const u8, args: anytype) void {
     }
 
     self.resetStack();
+}
+
+/// Capture an upvalue pointing to the given stack slot
+fn captureUpvalue(self: *VM, local: *Value) !*ObjUpvalue {
+    // TODO: In a complete implementation, we would maintain a list of open upvalues
+    // to avoid creating duplicates for the same stack slot. For now, we create a new one each time.
+
+    // TODO: For GC implementation later the unmanaged memory version
+    return lib.newUpvalue(&self.allocator, local);
 }

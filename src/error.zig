@@ -17,6 +17,8 @@ pub const CompilerError = error{
     LocalNotFound,
     /// Cannot declare a variable with its own initializer
     SameInitializer,
+    /// Too many upvalues
+    TooManyUpvalues,
 };
 
 pub const RuntimeError = error{
